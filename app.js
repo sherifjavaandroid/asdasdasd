@@ -30,10 +30,11 @@ const limiter = rateLimit({
 // تطبيق الميدلوير الأساسي
 app.use(helmet()); // إضافة رؤوس أمان HTTP
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'], // Allow both localhost forms
-    methods: ['GET', 'POST', 'OPTIONS'], // Include OPTIONS for preflight
-    allowedHeaders: ['Content-Type', 'Authorization'], // More headers
-    credentials: true // Allow cookies if needed
+    // Add the actual origin your frontend is running from
+    origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost', 'http://127.0.0.1', 'file://', 'null'],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 }));
 app.use(express.json()); // تحليل طلبات JSON
 app.use(express.urlencoded({ extended: true })); // تحليل طلبات HTML Form

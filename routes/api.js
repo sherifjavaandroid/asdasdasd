@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+
 const { asyncHandler } = require('../middleware/errorMiddleware');
 const { validateAnalysisRequest } = require('../middleware/validationMiddleware');
 const analysisController = require('../controllers/analysisController');

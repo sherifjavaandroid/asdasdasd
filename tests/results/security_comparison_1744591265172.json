@@ -1,0 +1,249 @@
+{
+  "analysisMeta": {
+    "analysisType": "security",
+    "language": "JavaScript",
+    "appType": "reactNative",
+    "timestamp": "2025-04-14T00:41:05.171Z"
+  },
+  "models": {
+    "openai": {
+      "duration": 10.319,
+      "issuesCount": 6,
+      "results": {
+        "findings": [
+          {
+            "title": "[",
+            "description": "\"يتم تنفيذ عمليات معالجة الصور المكثفة في الخيط الرئيسي، مما قد يؤدي إلى تجميد واجهة المستخدم.\",",
+            "severity": "\"low\",",
+            "recommendation": "\"نقل العمليات المكثفة إلى خيوط خلفية باستخدام Web Workers أو مكتبات مخصصة.\", } ],"
+          },
+          {
+            "title": "2,",
+            "description": "",
+            "severity": "medium",
+            "recommendation": ""
+          },
+          {
+            "title": "2,",
+            "description": "",
+            "severity": "medium",
+            "recommendation": ""
+          },
+          {
+            "title": "1,",
+            "description": "",
+            "severity": "medium",
+            "recommendation": ""
+          },
+          {
+            "title": "1,",
+            "description": "",
+            "severity": "medium",
+            "recommendation": ""
+          },
+          {
+            "title": "0",
+            "description": "",
+            "severity": "medium",
+            "recommendation": ""
+          }
+        ],
+        "summary": "تم تحليل الكود وتم العثور على 6 مشكلة محتملة."
+      }
+    },
+    "gemini": {
+      "duration": 8.6,
+      "issuesCount": 7,
+      "results": {
+        "findings": [
+          {
+            "title": "اتصال HTTP غير آمن",
+            "description": "يتم استخدام اتصال HTTP غير مشفر لجلب بيانات المستخدم وتحديث الموقع. هذا يعرض البيانات للخطر أثناء النقل، حيث يمكن اعتراضها والتلاعب بها من قبل مهاجم.",
+            "severity": "high",
+            "codeSnippet": "const url = 'http://api.example.com/users/' + userId;\nfetch('http://api.example.com/update-location', {",
+            "recommendation": "استخدم HTTPS لتشفير جميع الاتصالات بين التطبيق والخادم. قم بتحديث عناوين URL إلى 'https://api.example.com/users/' و 'https://api.example.com/update-location'.",
+            "category": "اتصالات غير آمنة"
+          },
+          {
+            "title": "تخزين البيانات الحساسة بشكل غير آمن",
+            "description": "يتم تخزين رمز المستخدم وبيانات المستخدم في التخزين المحلي (localStorage) بدون تشفير. هذا يعني أنه يمكن الوصول إلى هذه البيانات بسهولة من قبل أي شخص لديه حق الوصول إلى الجهاز.",
+            "severity": "critical",
+            "codeSnippet": "localStorage.setItem('user_token', data.token);\nlocalStorage.setItem('user_data', JSON.stringify(data));",
+            "recommendation": "لا تقم بتخزين البيانات الحساسة مثل رموز المستخدمين وبيانات المستخدم في التخزين المحلي. إذا كان التخزين مطلوبًا، استخدم حلول تخزين آمنة مثل Keychain (iOS) أو EncryptedSharedPreferences (Android) أو استخدم مكتبة تشفير لتشفير البيانات قبل تخزينها.",
+            "category": "تخزين البيانات الحساسة بشكل غير آمن"
+          },
+          {
+            "title": "استخدام `eval` غير آمن",
+            "description": "تستخدم الدالة `executeUserCommand` الدالة `eval` لتنفيذ سلسلة نصية كشيفرة. هذا يمثل خطرًا أمنيًا كبيرًا، حيث يمكن للمهاجمين إدخال شيفرة ضارة وتنفيذها على جهاز المستخدم.",
+            "severity": "critical",
+            "codeSnippet": "eval(command);",
+            "recommendation": "تجنب استخدام `eval` بأي ثمن. إذا كنت بحاجة إلى تنفيذ شيفرة ديناميكيًا، فابحث عن بدائل أكثر أمانًا مثل استخدام دالة `Function` مع قيود صارمة أو استخدام مكتبة لغة برمجة نصية آمنة.",
+            "category": "ثغرات إدخال/إخراج البيانات"
+          },
+          {
+            "title": "تسجيل معلومات حساسة",
+            "description": "يتم تسجيل معلومات حساسة مثل اسم المستخدم ومعرف المستخدم ورمز API في وحدة التحكم. هذا يعرض هذه المعلومات للخطر، خاصة إذا تم الوصول إلى سجلات وحدة التحكم من قبل أطراف غير مصرح بها.",
+            "severity": "medium",
+            "codeSnippet": "console.log('تم تسجيل دخول المستخدم: ' + data.username);\nconsole.log('معرف المستخدم: ' + data.id);\nconsole.log('رمز API: ' + data.apiKey);",
+            "recommendation": "تجنب تسجيل معلومات حساسة في وحدة التحكم. استخدم التسجيل فقط لأغراض التصحيح وقم بإزالة أو إخفاء أي معلومات حساسة قبل نشر التطبيق.",
+            "category": "تخزين البيانات الحساسة بشكل غير آمن"
+          },
+          {
+            "title": "مفتاح API مضمن بشكل ثابت",
+            "description": "يتم تضمين مفتاح API بشكل ثابت في الكود. هذا يعني أنه يمكن لأي شخص يقوم بتفكيك التطبيق استخراج مفتاح API واستخدامه لأغراض ضارة.",
+            "severity": "critical",
+            "codeSnippet": "apiKey: 'sk_live_12345abcdef6789',",
+            "recommendation": "لا تقم بتضمين مفاتيح API أو أي أسرار أخرى بشكل ثابت في الكود. قم بتخزينها بشكل آمن على الخادم واسترجعها عند الحاجة. يمكنك أيضًا استخدام متغيرات البيئة أو حلول إدارة الأسرار لتخزين الأسرار بشكل آمن.",
+            "category": "أسرار مضمنة بشكل ثابت في الكود"
+          },
+          {
+            "title": "استهلاك البطارية المفرط",
+            "description": "يتم استدعاء خدمة تحديد الموقع كل 5 ثوانٍ. هذا يستهلك البطارية بشكل كبير ويمكن أن يؤثر سلبًا على تجربة المستخدم.",
+            "severity": "medium",
+            "codeSnippet": "setInterval(() => {\n  navigator.geolocation.getCurrentPosition(position => {\n    sendLocationToServer(position.coords);\n  });\n}, 5000);",
+            "recommendation": "قلل من تكرار استدعاء خدمة تحديد الموقع. استخدم تقنيات مثل السياج الجغرافي أو تحديد الموقع المستند إلى الأحداث لتقليل استهلاك البطارية.",
+            "category": "مشاكل تكوين الأمان"
+          },
+          {
+            "title": "معالجة الصور في الخيط الرئيسي",
+            "description": "يتم تنفيذ عمليات معالجة الصور المكثفة في الخيط الرئيسي. هذا يمكن أن يؤدي إلى تجميد واجهة المستخدم وتجربة مستخدم سيئة.",
+            "severity": "medium",
+            "codeSnippet": "const results = [];\n  // حلقة كبيرة ستؤثر على أداء الخيط الرئيسي\n  for (let i = 0; i < images.length; i++) {\n    // عمليات معالجة مكثفة في الخيط الرئيسي\n    const processedImage = heavyImageProcessing(images[i]);\n    results.push(processedImage);\n  }",
+            "recommendation": "نقل عمليات معالجة الصور المكثفة إلى خيط خلفية (Web Worker أو AsyncTask) لتجنب حظر الخيط الرئيسي.",
+            "category": "مشاكل تكوين الأمان"
+          }
+        ],
+        "summary": "الكود يحتوي على العديد من المشكلات الأمنية الخطيرة، بما في ذلك استخدام اتصالات HTTP غير آمنة، وتخزين البيانات الحساسة بشكل غير آمن، واستخدام `eval` غير آمن، وتضمين مفتاح API بشكل ثابت. بالإضافة إلى ذلك، هناك مشكلات تتعلق بأداء التطبيق واستهلاك البطارية. يجب معالجة هذه المشكلات على الفور لضمان أمان التطبيق وحماية بيانات المستخدم."
+      }
+    },
+    "deepSeek": {
+      "duration": 72.218,
+      "issuesCount": 9,
+      "results": {
+        "findings": [
+          {
+            "title": "getUserData uses HTTP. Line 3.",
+            "severity": "medium",
+            "category": "Security Issue",
+            "description": "",
+            "recommendation": ""
+          },
+          {
+            "title": "sendLocationToServer uses HTTP. Line in the sendLocation function where fetch is called.",
+            "severity": "critical",
+            "category": "\"Insecure Communication\", codeSnippet: \"const url = 'http://api.example.com/users/' + userId;\", lineNumber: 3,",
+            "description": "\"The function getUserData uses HTTP instead of HTTPS, exposing sensitive data to interception.\",",
+            "recommendation": "\"Replace HTTP with HTTPS for all API endpoints to ensure encrypted communication.\""
+          },
+          {
+            "title": "",
+            "severity": "critical",
+            "category": "\"Insecure Communication\", codeSnippet: \"fetch('http://api.example.com/update-location', { ... })\", lineNumber: (line number where fetch is called in sendLocationToServer),",
+            "description": "\"The function sendLocationToServer uses HTTP, exposing geolocation data and API key to interception.\",",
+            "recommendation": "\"Use HTTPS for all API requests to protect data in transit.\""
+          },
+          {
+            "title": "",
+            "severity": "high",
+            "category": "\"Insecure Data Storage\", codeSnippet: \"localStorage.setItem('user_token', data.token); localStorage.setItem('user_data', JSON.stringify(data));\", lineNumber: 8-9,",
+            "description": "\"Storing user tokens and data in localStorage without encryption exposes sensitive information to potential theft.\",",
+            "recommendation": "\"Use secure storage mechanisms with encryption, such as react-native-keychain for sensitive data.\""
+          },
+          {
+            "title": "",
+            "severity": "critical",
+            "category": "\"Insufficient Input/Output Validation\", codeSnippet: \"eval(command);\", lineNumber: (line of eval),",
+            "description": "\"Using eval on user input can lead to arbitrary code execution vulnerabilities.\",",
+            "recommendation": "\"Avoid using eval; use safer alternatives or strictly validate and sanitize all user inputs.\""
+          },
+          {
+            "title": "",
+            "severity": "high",
+            "category": "\"Hardcoded Secrets\", codeSnippet: \"apiKey: 'sk_live_12345abcdef6789',\", lineNumber: (line where apiKey is set),",
+            "description": "\"The API key is hardcoded in the source code, risking exposure if the code is decompiled or accessed.\",",
+            "recommendation": "\"Store secrets in environment variables or secure configuration files, and use secure secret management.\""
+          },
+          {
+            "title": "",
+            "severity": "medium",
+            "category": "\"Data Leakage\", codeSnippet: \"console.log('رمز API: ' + data.apiKey);\", lineNumber: 16,",
+            "description": "\"Logging sensitive information like API keys and user IDs to the console can lead to data leakage.\",",
+            "recommendation": "\"Avoid logging sensitive data. Remove or redact sensitive information from logs.\""
+          },
+          {
+            "title": "",
+            "severity": "high",
+            "category": "\"Insecure Authentication/Authorization\", codeSnippet: \"const url = 'http://api.example.com/users/' + userId;\", lineNumber: 3,",
+            "description": "\"The userId parameter is used without proper authorization checks, allowing potential access to other users' data.\",",
+            "recommendation": "\"Implement proper authorization checks to ensure users can only access their own data.\""
+          },
+          {
+            "title": "",
+            "severity": "medium",
+            "category": "\"Path Overwrite and Path Traversal\", codeSnippet: \"const url = 'http://api.example.com/users/' + userId;\", lineNumber:3,",
+            "description": "\"Concatenating userId into the URL without sanitization could allow path traversal attacks if the server doesn't properly handle the path.\",",
+            "recommendation": "\"Sanitize the userId parameter to prevent path traversal and ensure the server validates and normalizes the request path.\" That's another possible finding. Now, compiling all these into the JSON structure. The summary should highlight the critical and high severity issues, like insecure communication, hardcoded secrets, code injection, and IDOR. </think> { \"findings\": [ { \"id\": \"1\", \"title\": \"Insecure Communication in User Data Fetch\", \"description\": \"استخدام اتصال HTTP غير مشفر لجلب بيانات المستخدم يعرض البيانات الحساسة للاعتراض.\", \"severity\": \"critical\", \"category\": \"اتصالات غير آمنة\", \"codeSnippet\": \"const url = 'http://api.example.com/users/' + userId;\", \"lineNumber\": 3, \"recommendation\": \"استخدام HTTPS بدلاً من HTTP لجميع الاتصالات وتفعيل التشفير خلال النقل\" }, { \"id\": \"2\", \"title\": \"تخزين بيانات غير آمن\", \"description\": \"تخزين التوكن وبيانات المستخدم في localStorage بدون تشفير يعرضها للسرقة.\", \"severity\": \"high\", \"category\": \"تخزين بيانات غير آمن\", \"codeSnippet\": \"localStorage.setItem('user_token', data.token);\", \"lineNumber\": 8, \"recommendation\": \"استخدام وحدات تخزين آمنة مع تشفير قوي مثل react-native-keychain\" }, { \"id\": \"3\", \"title\": \"ثغرة تنفيذ الأكواد عبر eval\", \"description\": \"استخدام eval مع مدخلات المستخدم يسمح بتنفيذ أكواد عشوائية.\", \"severity\": \"critical\", \"category\": \"تحقق غير كاف من الإدخال/الإخراج\", \"codeSnippet\": \"eval(command);\", \"lineNumber\": 22, \"recommendation\": \"تجنب استخدام eval واستبداله ببدائل آمنة مع التحقق الصارم من المدخلات\" }, { \"id\": \"4\", \"title\": \"أسرار مضمنة بشكل ثابت\", \"description\": \"وجود مفتاح API حيوي (sk_live) مضمن مباشرة في الكود المصدري.\", \"severity\": \"high\", \"category\": \"أسرار مضمنة بشكل ثابت\", \"codeSnippet\": \"apiKey: 'sk_live_12345abcdef6789',\", \"lineNumber\": 36, \"recommendation\": \"استخدام متغيرات البيئة أو حلول إدارة الأسرار الآمنة مثل AWS Secrets Manager\" }, { \"id\": \"5\", \"title\": \"تسريب بيانات حساسة عبر السجلات\", \"description\": \"تسجيل\", \"recommendation\": \"استخدام متغيرات البيئة أو ملفات إعدادات آمنة خارجية مع حماية السجلات\" }, { \"id\": \"6\", \"title\": \"مصادقة وتفويض غير آمنة\", \"description\": \"عدم التحقق من صلاحيات userId يسمح بالوصول غير المصرح به (IDOR).\", \"severity\": \"high\", \"category\": \"مصادقة وتفويض غير آمنة\", \"codeSnippet\": \"const url = 'http://api.example.com/users/' + userId;\", \"lineNumber\": 3, \"recommendation\": \"تطبيق تحقق صارم من الصلاحيات واعتماد آليات تفويض مثل JWT\" }, { \"id\": \"7\", \"title\": \"جمع بيانات الموقع بشكل مكثف\", \"description\": \"تحديث الموقع كل 5 ثوانٍ يستهلك البطارية وينتهك الخصوصية.\", \"severity\": \"medium\", \"category\": \"ضوابط خصوصية غير كافية\", \"codeSnippet\": \"setInterval(() => {...}, 5000);\", \"lineNumber\": 25, \"recommendation\": \"تعديل الفاصل الزمني حسب الحاجة الفعلية وإضافة شفافية للمستخدم"
+          }
+        ],
+        "summary": "تم العثور على 9 مشكلة أمان محتملة في الكود المكتوب بلغة JavaScript."
+      }
+    },
+    "llama": {
+      "duration": 16.328,
+      "issuesCount": 6,
+      "results": {
+        "findings": [
+          {
+            "title": "اتصال HTTP غير مشفر",
+            "description": "يستخدم الكود اتصال HTTP غير مشفر لاستدعاء الخدمات، مما يسمح للمهاجمين بالاستماع إلى البيانات الحساسة.",
+            "severity": "critical",
+            "codeSnippet": "const url = 'http://api.example.com/users/' + userId; fetch(url)",
+            "recommendation": "استخدم HTTPS بدلاً من HTTP لضمان تشفير الاتصالات.",
+            "category": "اتصالات غير آمنة"
+          },
+          {
+            "title": "تخزين بيانات المستخدم بدون تشفير",
+            "description": "تخزين بيانات المستخدم في التخزين المحلي بدون تشفير، مما يسمح للمهاجمين بالوصول إلى هذه البيانات.",
+            "severity": "high",
+            "codeSnippet": "localStorage.setItem('user_token', data.token); localStorage.setItem('user_data', JSON.stringify(data))",
+            "recommendation": "استخدم تقنيات التشفير لتحمي بيانات المستخدم قبل تخزينها.",
+            "category": "تخزين البيانات الحساسة بشكل غير آمن"
+          },
+          {
+            "title": "استخدام تقنية eval لتنفيذ كود من مدخلات المستخدم",
+            "description": "استخدام تقنية eval لتنفيذ كود من مدخلات المستخدم، مما يسمح للمهاجمين بتنفيذ كود ضار.",
+            "severity": "critical",
+            "codeSnippet": "eval(command)",
+            "recommendation": "تجنب استخدام تقنية eval وتحقق من مدخلات المستخدم بدلاً من ذلك.",
+            "category": "ثغرات إدخال/إخراج البيانات"
+          },
+          {
+            "title": "استهلاك البطارية بسبب استدعاء الخدمات بشكل متكرر",
+            "description": "استدعاء خدمة تحديد الموقع كل 5 ثوانٍ، مما قد يستهلك البطارية.",
+            "severity": "medium",
+            "codeSnippet": "setInterval(() => { navigator.geolocation.getCurrentPosition(position => { sendLocationToServer(position.coords); }) }, 5000)",
+            "recommendation": "تحسين التطبيق لاستدعاء الخدمات بشكل أقل تكرارًا أو استخدام تقنيات أكثر كفاءة.",
+            "category": "مشاكل التكوين"
+          },
+          {
+            "title": "تخزين معلومات حساسة في كود ثابت",
+            "description": "تخزين معلومات حساسة مثل apiKey في كود ثابت، مما يسمح للمهاجمين بالوصول إلى هذه المعلومات.",
+            "severity": "high",
+            "codeSnippet": "apiKey: 'sk_live_12345abcdef6789'",
+            "recommendation": "استخدم تقنيات أمان لتحمي المعلومات الحساسة، مثل تخزينها في مكان آمن أو استخدام متغيرات بيئة.",
+            "category": "أسرار مضمنة بشكل ثابت في الكود"
+          },
+          {
+            "title": "معالجة صور المستخدم في الخيط الرئيسي",
+            "description": "معالجة صور المستخدم في الخيط الرئيسي، مما قد يؤثر على أداء التطبيق.",
+            "severity": "medium",
+            "codeSnippet": "for (let i = 0; i < images.length; i++) { const processedImage = heavyImageProcessing(images[i]); results.push(processedImage); }",
+            "recommendation": "استخدم تقنيات متعددة الخيوط أو خدمات معالجة صور في الخلفية لتحسين أداء التطبيق.",
+            "category": "مشاكل الأداء"
+          }
+        ],
+        "summary": "تم العثور على عدة مشاكل أمنية ومصممية في الكود، بما في ذلك اتصالات غير آمنة، تخزين بيانات المستخدم بدون تشفير، استخدام تقنية eval، استهلاك البطارية، تخزين معلومات حساسة في كود ثابت، ومعالجة صور المستخدم في الخيط الرئيسي. يُوصى بتصحيح هذه المشاكل لتحسين أمان وأداء التطبيق."
+      }
+    }
+  }
+}

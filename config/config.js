@@ -1,9 +1,10 @@
 require('dotenv').config();
+const configUpdater = require('../utils/configUpdater');
 
 /**
  * اعدادات تكوين التطبيق المركزية
  */
-const config = {
+let config = {
     // اعدادات بيئة التشغيل
     env: process.env.NODE_ENV || 'development',
     port: process.env.PORT || 5000,
@@ -75,5 +76,8 @@ const config = {
         maxRequests: process.env.RATE_LIMIT || 100,
     },
 };
+
+// تطبيق إعدادات إضافية
+config = configUpdater(config);
 
 module.exports = config;

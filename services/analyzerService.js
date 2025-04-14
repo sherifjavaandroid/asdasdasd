@@ -32,7 +32,15 @@ class AnalyzerService {
                 windowStart: Date.now(),
                 windowSize: 60000, // 1 دقيقة
                 maxRequestsPerWindow: 5 // الحد الأقصى للطلبات في النافذة الزمنية
+            },
+            gemini: {
+                requestsInWindow: 0,
+                windowStart: Date.now(),
+                windowSize: 60000, // 1 دقيقة
+                maxRequestsPerWindow: 10 // الحد الأقصى للطلبات في النافذة الزمنية
             }
+
+
         };
 
         // طابور تأجيل للطلبات المؤجلة
@@ -209,15 +217,16 @@ class AnalyzerService {
 
         // تقسيم الملفات بالتساوي بين الخدمات الثلاث
         const totalFiles = allFiles.length;
-        const filesPerService = Math.ceil(totalFiles / 3);
+        const filesPerService = Math.ceil(totalFiles / 4);
 
         const distribution = {
             openai: allFiles.slice(0, filesPerService),
+            gemini: allFiles.slice(filesPerService, filesPerService * 2),
             deepSeek: allFiles.slice(filesPerService, filesPerService * 2),
             llama: allFiles.slice(filesPerService * 2)
         };
 
-        logger.debug(`اكتمل توزيع الملفات: openai=${distribution.openai.length}, deepSeek=${distribution.deepSeek.length}, llama=${distribution.llama.length}`);
+        logger.debug(`اكتمل توزيع الملفات: openai=${distribution.openai.length}, gemini=${distribution.gemini.length}, deepSeek=${distribution.deepSeek.length}, llama=${distribution.llama.length}`);
         return distribution;
     }
 
@@ -373,6 +382,14 @@ class AnalyzerService {
 
                     // استخدام OpenAI للتحليل
                     analysisResult = await openaiService.analyzeCode(file.content, language, analysisType, appType);
+                    break;
+                case 'gemini':
+                    // تحديث معدل الطلبات
+                    this.updateRateLimit('gemini');
+                    logger.info(`بدء تحليل الكود باستخدام Google Gemini, حجم الكود: ${file.content.length} حرف`);
+
+                    // استخدام Gemini للتحليل
+                    analysisResult = await geminiService.analyzeCode(file.content, language, analysisType, appType);
                     break;
 
                 case 'deepSeek':

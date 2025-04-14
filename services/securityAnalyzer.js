@@ -1,3 +1,4 @@
+
 const logger = require('../utils/logger');
 const { SECURITY_RISKS, MOBILE_RISKS, SEVERITY_LEVELS } = require('../utils/constants');
 
@@ -38,6 +39,9 @@ class SecurityAnalyzer {
 
             // فحص مشاكل التحقق من الإدخال
             this.checkInputValidation(code, filePath, language, appType, issues);
+
+            // فحص وجود تقنية SSL Pinning
+            this.checkSSLPinning(code, filePath, language, appType, issues);
 
             logger.debug(`تم اكتشاف ${issues.length} مشكلة أمنية في الملف: ${filePath}`);
 
@@ -424,6 +428,101 @@ class SecurityAnalyzer {
                     lineNumber,
                     codeSnippet
                 });
+            }
+        }
+    }
+
+    /**
+     * فحص وجود تقنية SSL Pinning
+     * @param {string} code - الكود المراد تحليله
+     * @param {string} filePath - مسار الملف
+     * @param {string} language - لغة البرمجة
+     * @param {string} appType - نوع تطبيق الموبايل
+     * @param {Array} issues - قائمة المشاكل المكتشفة
+     */
+    checkSSLPinning(code, filePath, language, appType, issues) {
+        // أنماط للكشف عن وجود SSL Pinning
+        const sslPinningPatterns = [];
+
+        if (language === 'Java' || language === 'Kotlin') {
+            // Android - أنماط تثبيت الشهادات في Java/Kotlin
+            sslPinningPatterns.push({
+                pattern: /CertificatePinner|okhttp3\.CertificatePinner|NetworkSecurityConfig/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning باستخدام CertificatePinner من OkHttp أو استخدام Android Network Security Config.'
+            });
+        } else if (language === 'Swift' || language === 'Objective-C') {
+            // iOS - أنماط تثبيت الشهادات في Swift/Objective-C
+            sslPinningPatterns.push({
+                pattern: /SSLPinningMode|AFSecurityPolicy|evaluateServerTrust|SecTrustRef|NSURLSession delegate|URLSession delegate|serverTrustPolicy/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning في iOS باستخدام NSURLSession delegate أو Alamofire مع ServerTrustPolicy.'
+            });
+        } else if (language === 'JavaScript' || language === 'TypeScript') {
+            // React Native - أنماط تثبيت الشهادات في JavaScript/TypeScript
+            sslPinningPatterns.push({
+                pattern: /ssl-pinning|sslPinning|pinning|react-native-ssl-pinning|sslCertificate|fetchWithSSLPinning/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم في React Native، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning في React Native باستخدام مكتبات مثل react-native-ssl-pinning أو react-native-pinch.'
+            });
+        } else if (language === 'Dart') {
+            // Flutter - أنماط تثبيت الشهادات في Dart
+            sslPinningPatterns.push({
+                pattern: /SecurityContext|setTrustedCertificatesBytes|ssl_pinning_plugin|badCertificateCallback|io_client_certificate|HttpClient/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم في Flutter، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning في Flutter باستخدام HttpClient مع SecurityContext أو استخدام مكتبة مثل ssl_pinning_plugin.'
+            });
+        } else if (language === 'C#') {
+            // Xamarin - أنماط تثبيت الشهادات في C#
+            sslPinningPatterns.push({
+                pattern: /ServicePointManager\.ServerCertificateValidationCallback|CertificateValidationCallback|CustomCertificatePolicy|WebRequestHandler\.ServerCertificateValidationCallback/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم في Xamarin، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning في Xamarin باستخدام ServicePointManager.ServerCertificateValidationCallback أو WebRequestHandler.ServerCertificateValidationCallback.'
+            });
+        }
+
+        // البحث عن أنماط SSL Pinning، ولكن فقط في الملفات ذات الصلة بالشبكة
+        const networkRelatedFile = filePath.match(/network|http|connection|api|service|client|config|security|communication|certificate|ssl|authentication/i);
+
+        if (networkRelatedFile) {
+            for (const { pattern, negative, category, severity, description, recommendation } of sslPinningPatterns) {
+                pattern.lastIndex = 0;
+
+                // هل الكود يحتوي على أنماط SSL Pinning؟
+                const hasSSLPinning = pattern.test(code);
+
+                // إذا لم يكن هناك SSL Pinning وهذا ما نبحث عنه (negative = true)
+                if (negative && !hasSSLPinning) {
+                    issues.push({
+                        title: 'غياب تقنية SSL Pinning',
+                        category,
+                        severity,
+                        description,
+                        recommendation,
+                        filePath,
+                        lineNumber: this.getLineNumber(code, 0),
+                        codeSnippet: "يجب تطبيق SSL Pinning في هذا الملف",
+                        type: 'issue'
+                    });
+
+                    // نوقف البحث بعد العثور على مشكلة واحدة
+                    break;
+                }
             }
         }
     }

@@ -7,6 +7,8 @@ const llamaService = require('./llamaService');
 const { detectMobileAppType } = require('../utils/helpers');
 const Report = require('../models/Report');
 const config = require('../config/config');
+// في بداية ملف analyzerService.js، نضيف:
+const securityAnalyzer = require('./securityAnalyzer');
 
 /**
  * خدمة تحليل الكود الرئيسية مع تحسينات توزيع الطلبات وإدارة معدلات الطلبات
@@ -127,6 +129,129 @@ class AnalyzerService {
             logger.error(`تفاصيل الخطأ: ${error.stack || 'لا توجد تفاصيل إضافية'}`);
             report.setError(error);
             return report;
+        }
+    }
+
+
+
+
+
+
+    /**
+     * فحص وجود تقنية SSL Pinning
+     * @param {string} code - الكود المراد تحليله
+     * @param {string} filePath - مسار الملف
+     * @param {string} language - لغة البرمجة
+     * @param {string} appType - نوع تطبيق الموبايل
+     * @param {Array} issues - قائمة المشاكل المكتشفة
+     */
+    checkSSLPinning(code, filePath, language, appType, issues) {
+        // أنماط للكشف عن وجود SSL Pinning
+        const sslPinningPatterns = [];
+
+        if (language === 'Java' || language === 'Kotlin') {
+            // Android - أنماط تثبيت الشهادات في Java/Kotlin
+            sslPinningPatterns.push({
+                pattern: /CertificatePinner|okhttp3\.CertificatePinner|NetworkSecurityConfig/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning باستخدام CertificatePinner من OkHttp أو استخدام Android Network Security Config.'
+            });
+        } else if (language === 'Swift' || language === 'Objective-C') {
+            // iOS - أنماط تثبيت الشهادات في Swift/Objective-C
+            sslPinningPatterns.push({
+                pattern: /SSLPinningMode|AFSecurityPolicy|evaluateServerTrust|SecTrustRef|NSURLSession delegate|URLSession delegate|serverTrustPolicy/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning في iOS باستخدام NSURLSession delegate أو Alamofire مع ServerTrustPolicy.'
+            });
+        } else if (language === 'JavaScript' || language === 'TypeScript') {
+            // React Native - أنماط تثبيت الشهادات في JavaScript/TypeScript
+            sslPinningPatterns.push({
+                pattern: /ssl-pinning|sslPinning|pinning|react-native-ssl-pinning|sslCertificate|fetchWithSSLPinning/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم في React Native، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning في React Native باستخدام مكتبات مثل react-native-ssl-pinning أو react-native-pinch.'
+            });
+        } else if (language === 'Dart') {
+            // Flutter - أنماط تثبيت الشهادات في Dart
+            sslPinningPatterns.push({
+                pattern: /SecurityContext|setTrustedCertificatesBytes|ssl_pinning_plugin|badCertificateCallback|io_client_certificate|HttpClient/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم في Flutter، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning في Flutter باستخدام HttpClient مع SecurityContext أو استخدام مكتبة مثل ssl_pinning_plugin.'
+            });
+        } else if (language === 'C#') {
+            // Xamarin - أنماط تثبيت الشهادات في C#
+            sslPinningPatterns.push({
+                pattern: /ServicePointManager\.ServerCertificateValidationCallback|CertificateValidationCallback|CustomCertificatePolicy|WebRequestHandler\.ServerCertificateValidationCallback/g,
+                negative: true, // نحن نبحث عن غياب هذه الأنماط
+                category: SECURITY_RISKS.M5_INSECURE_COMMUNICATION,
+                severity: SEVERITY_LEVELS.CRITICAL,
+                description: 'عدم استخدام تقنية SSL Pinning للتحقق من صحة شهادة الخادم في Xamarin، مما يعرّض التطبيق لهجمات Man-in-the-Middle.',
+                recommendation: 'قم بتطبيق SSL Pinning في Xamarin باستخدام ServicePointManager.ServerCertificateValidationCallback أو WebRequestHandler.ServerCertificateValidationCallback.'
+            });
+        }
+
+        // البحث عن أنماط التحقق من الشهادات ولكن فقط في الملفات ذات الصلة
+        // مثل ملفات الشبكة أو الاتصالات أو التكوين
+        const networkRelatedFile = filePath.match(/network|http|connection|api|service|client|config|security|communication|certificate|ssl|authentication/i);
+
+        if (networkRelatedFile) {
+            for (const { pattern, negative, context, category, severity, description, recommendation } of sslPinningPatterns) {
+                pattern.lastIndex = 0;
+
+                // هل الكود يحتوي على أنماط SSL Pinning؟
+                const hasSSLPinning = pattern.test(code);
+
+                // إذا لم يكن هناك SSL Pinning وهذا ما نبحث عنه (negative = true)
+                // أو إذا كان هناك SSL Pinning ولا نبحث عن الغياب (negative = false)
+                if ((negative && !hasSSLPinning) || (!negative && hasSSLPinning)) {
+                    // إذا تم تحديد سياق إضافي، التحقق منه قبل إضافة المشكلة
+                    if (context) {
+                        pattern.lastIndex = 0;
+                        let match;
+                        let contextMatched = false;
+                        while ((match = pattern.exec(code)) !== null) {
+                            const contextStart = Math.max(0, match.index - 500);
+                            const contextEnd = Math.min(code.length, match.index + match[0].length + 500);
+                            const surroundingCode = code.substring(contextStart, contextEnd);
+
+                            if (context.test(surroundingCode)) {
+                                contextMatched = true;
+                                break;
+                            }
+                        }
+
+                        if (!contextMatched) {
+                            continue;
+                        }
+                    }
+
+                    issues.push({
+                        title: 'غياب تقنية SSL Pinning',
+                        category,
+                        severity,
+                        description,
+                        recommendation,
+                        filePath,
+                        lineNumber: 0, // سيتم تحديده لاحقاً إذا أمكن
+                        codeSnippet: "يجب تطبيق SSL Pinning في هذا الملف",
+                        type: 'issue'
+                    });
+
+                    // نوقف البحث بعد العثور على مشكلة واحدة
+                    break;
+                }
+            }
         }
     }
 
@@ -348,6 +473,37 @@ class AnalyzerService {
         try {
             logger.debug(`تحليل نوع ${analysisType} للملف: ${file.path} باستخدام ${preferredService}, وقت البدء: ${new Date(fileAnalysisStart).toISOString()}`);
 
+            // إجراء تحليل محلي أولاً إذا كان نوع التحليل هو 'security'
+            // في بداية دالة analyzeFile في ملف analyzerService.js
+            if (analysisType === 'security') {
+                try {
+                    // استدعاء محلل الأمان المحلي
+                    const securityIssues = securityAnalyzer.analyzeSecurityPatterns(
+                        file.content,
+                        file.path,
+                        language,
+                        appType
+                    );
+
+                    // إضافة المشكلات الأمنية المكتشفة محلياً إلى التقرير
+                    if (securityIssues && securityIssues.length > 0) {
+                        for (const finding of securityIssues) {
+                            report.addFinding('security', {
+                                ...finding,
+                                filePath: file.path,
+                                type: finding.type || 'issue',
+                                source: 'local_analyzer',
+                                analysisTimestamp: new Date().toISOString()
+                            });
+                        }
+                        logger.info(`تم اكتشاف ${securityIssues.length} مشكلة أمان محلياً في الملف: ${file.path}`);
+                    }
+                } catch (localAnalysisError) {
+                    logger.error(`خطأ في التحليل المحلي للأمان: ${localAnalysisError.message}`);
+                    // نواصل التحليل باستخدام خدمات الذكاء الاصطناعي حتى في حالة فشل التحليل المحلي
+                }
+            }
+
             // التحقق من معدل الطلبات والتبديل إلى خدمة أخرى إذا لزم الأمر
             let service = await this.getAvailableService(preferredService, file, language, analysisType, appType, report);
 
@@ -465,6 +621,8 @@ class AnalyzerService {
             }
         }
     }
+
+
 
     /**
      * معالجة الطلبات المؤجلة

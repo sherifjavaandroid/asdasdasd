@@ -6,7 +6,7 @@ require('dotenv').config();
 const config = {
     // اعدادات بيئة التشغيل
     env: process.env.NODE_ENV || 'development',
-    port: process.env.PORT || 3000,
+    port: process.env.PORT || 5000,
 
     // اعدادات تسجيل الأحداث
     logs: {

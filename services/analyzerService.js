@@ -10,6 +10,7 @@ const config = require('../config/config');
 // في بداية ملف analyzerService.js، نضيف:
 const securityAnalyzer = require('./securityAnalyzer');
 const batteryAnalyzer = require('./batteryAnalyzer');
+const performanceAnalyzer = require('./performanceAnalyzer');
 
 /**
  * خدمة تحليل الكود الرئيسية مع تحسينات توزيع الطلبات وإدارة معدلات الطلبات
@@ -372,6 +373,8 @@ class AnalyzerService {
                     // نواصل التحليل باستخدام خدمات الذكاء الاصطناعي حتى في حالة فشل التحليل المحلي
                 }
             }
+
+
             if (analysisType === 'battery') {
                 try {
                     // Call battery analyzer
@@ -400,7 +403,34 @@ class AnalyzerService {
                     // Continue with AI-based analysis even if local analysis fails
                 }
             }
+            if (analysisType === 'performance') {
+                try {
+                    // Llamar al analizador de rendimiento
+                    const performanceIssues = performanceAnalyzer.analyzePerformancePatterns(
+                        file.content,
+                        file.path,
+                        language,
+                        appType
+                    );
 
+                    // Agregar los problemas de rendimiento al informe
+                    if (performanceIssues && performanceIssues.length > 0) {
+                        for (const finding of performanceIssues) {
+                            report.addFinding('performance', {
+                                ...finding,
+                                filePath: file.path,
+                                type: finding.type || 'issue',
+                                source: 'local_analyzer',
+                                analysisTimestamp: new Date().toISOString()
+                            });
+                        }
+                        logger.info(`Encontrados ${performanceIssues.length} problemas de rendimiento en el archivo: ${file.path}`);
+                    }
+                } catch (localAnalysisError) {
+                    logger.error(`Error en el análisis local de rendimiento: ${localAnalysisError.message}`);
+                    // Continuar con el análisis basado en IA incluso si el análisis local falla
+                }
+            }
             // التحقق من معدل الطلبات والتبديل إلى خدمة أخرى إذا لزم الأمر
             let service = await this.getAvailableService(preferredService, file, language, analysisType, appType, report);
 

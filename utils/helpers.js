@@ -11,44 +11,73 @@ const config = require('../config/config');
  * @returns {string} نوع تطبيق الموبايل أو 'unknown' إذا لم يتم التعرف عليه
  */
 function detectMobileAppType(files) {
+    // تجميع جميع مسارات الملفات للتسهيل
+    const filePaths = files.map(file => file.path.toLowerCase());
+
     // التحقق من وجود ملفات Flutter
-    const hasFlutterFiles = files.some(file =>
-        file.path.includes('pubspec.yaml') ||
-        file.path.endsWith('.dart')
+    const hasFlutterFiles = filePaths.some(path =>
+        path.includes('pubspec.yaml') ||
+        path.endsWith('.dart') ||
+        path.includes('/lib/') ||
+        path.includes('flutter')
     );
-    if (hasFlutterFiles) return 'flutter';
 
-    // التحقق من وجود ملفات Xamarin
-    const hasXamarinFiles = files.some(file =>
-        file.path.includes('.csproj') ||
-        file.path.endsWith('.xaml') ||
-        file.path.endsWith('.cs')
-    );
-    if (hasXamarinFiles) return 'xamarin';
-
-    // التحقق من وجود ملفات Native Android
-    const hasNativeAndroidFiles = files.some(file =>
-        file.path.includes('AndroidManifest.xml') ||
-        file.path.endsWith('.java') ||
-        file.path.endsWith('.kt')
-    );
-    if (hasNativeAndroidFiles) return 'nativeAndroid';
-
-    // التحقق من وجود ملفات Native iOS
-    const hasNativeIOSFiles = files.some(file =>
-        file.path.includes('Info.plist') ||
-        file.path.endsWith('.swift') ||
-        file.path.endsWith('.m') ||
-        file.path.endsWith('.h')
-    );
-    if (hasNativeIOSFiles) return 'nativeIOS';
+    if (hasFlutterFiles) {
+        return 'flutter';
+    }
 
     // التحقق من وجود ملفات React Native
-    const hasReactNativeFiles = files.some(file =>
-        file.path.includes('package.json') &&
-        (file.content && file.content.includes('react-native'))
+    const hasReactNativeFiles = filePaths.some(path =>
+        (path.includes('package.json') && files.find(f => f.path === path)?.content?.includes('react-native')) ||
+        path.includes('react-native.config.js') ||
+        path.includes('app.json') ||
+        (path.includes('index.js') && files.find(f => f.path === path)?.content?.includes('AppRegistry'))
     );
-    if (hasReactNativeFiles) return 'reactNative';
+
+    if (hasReactNativeFiles) {
+        return 'reactNative';
+    }
+
+    // التحقق من وجود ملفات Xamarin
+    const hasXamarinFiles = filePaths.some(path =>
+        path.includes('.csproj') ||
+        path.endsWith('.xaml') ||
+        path.includes('xamarin') ||
+        (path.endsWith('.cs') && (path.includes('/forms/') || path.includes('/android/') || path.includes('/ios/')))
+    );
+
+    if (hasXamarinFiles) {
+        return 'xamarin';
+    }
+
+    // التحقق من وجود ملفات Native Android
+    const hasNativeAndroidFiles = filePaths.some(path =>
+        path.includes('androidmanifest.xml') ||
+        path.includes('/res/layout/') ||
+        path.includes('/res/values/') ||
+        path.includes('build.gradle') ||
+        path.endsWith('.java') ||
+        path.endsWith('.kt')
+    );
+
+    if (hasNativeAndroidFiles) {
+        return 'nativeAndroid';
+    }
+
+    // التحقق من وجود ملفات Native iOS
+    const hasNativeIOSFiles = filePaths.some(path =>
+        path.includes('info.plist') ||
+        path.includes('appdelegate.') ||
+        path.includes('xcodeproj') ||
+        path.includes('xcworkspace') ||
+        path.endsWith('.swift') ||
+        path.endsWith('.m') ||
+        path.endsWith('.h')
+    );
+
+    if (hasNativeIOSFiles) {
+        return 'nativeIOS';
+    }
 
     // غير معروف
     return 'unknown';
@@ -84,73 +113,84 @@ function extractRepoInfo(repoUrl) {
 }
 
 /**
- * التحقق مما إذا كان يجب تحليل الملف بناءً على امتداده والمسار
+ * التحقق مما إذا كان يجب تحليل الملف بناءً على امتداده والمسار ونوع التطبيق
  * @param {string} filePath - مسار الملف
  * @param {string} appType - نوع تطبيق الموبايل
  * @returns {boolean} صحيح إذا كان يجب تحليل الملف
  */
 function shouldAnalyzeFile(filePath, appType) {
-    const extension = path.extname(filePath).toLowerCase();
+    // تحويل المسار إلى حروف صغيرة للمقارنة بشكل أفضل
+    const normalizedPath = filePath.toLowerCase();
+    const extension = path.extname(normalizedPath).toLowerCase();
 
-    // استبعاد المجلدات الخاصة بالمنصات في الفريموركس الكروس بلاتفورم
-    if (appType === 'flutter' || appType === 'reactNative' || appType === 'xamarin') {
-        // استبعاد ملفات المنصات المحددة (android, ios, macos, windows)
-        if (filePath.startsWith('android/') ||
-            filePath.startsWith('ios/') ||
-            filePath.startsWith('macos/') ||
-            filePath.startsWith('windows/') ||
-            filePath.includes('/android/') ||
-            filePath.includes('/ios/') ||
-            filePath.includes('/macos/') ||
-            filePath.includes('/windows/')) {
-            return false;
-        }
-
-        // في حالة Flutter، نحلل فقط ملفات Dart
-        if (appType === 'flutter') {
-            return extension === '.dart' || filePath.includes('pubspec.yaml');
-        }
-
-        // في حالة React Native، نحلل فقط ملفات JS/TS
-        if (appType === 'reactNative') {
-            return ['.js', '.jsx', '.ts', '.tsx'].includes(extension);
-        }
-
-        // في حالة Xamarin، نحلل فقط ملفات C# و XAML
-        if (appType === 'xamarin') {
-            return ['.cs', '.xaml'].includes(extension);
-        }
-    }
-
-    // استبعاد ملفات معينة
-    const excludedFiles = [
+    // استبعاد الملفات والمجلدات العامة
+    const excludedPatterns = [
         '.git', '.github', 'node_modules', 'build', 'dist', '.gradle',
-        '.idea', '.vscode', '.dart_tool', 'ios/Pods', 'android/build',
-        '.DS_Store', 'Thumbs.db', '.gitignore', 'LICENSE', 'README.md',
-        'yarn.lock', 'package-lock.json', 'Podfile.lock'
+        '.idea', '.vscode', '.dart_tool', '/pods/', '/build/',
+        '.ds_store', 'thumbs.db', '.gitignore', 'license', 'readme',
+        'yarn.lock', 'package-lock.json', 'podfile.lock', '.classpath',
+        '.project', '.settings', 'gradlew', 'gradlew.bat', '.iml',
+        'proguard-rules.pro', '.pbxproj'
     ];
 
-    if (excludedFiles.some(excluded => filePath.includes(excluded))) {
+    // التحقق من استبعاد المسارات العامة
+    if (excludedPatterns.some(pattern => normalizedPath.includes(pattern))) {
         return false;
     }
 
-    // التحقق من امتدادات الملفات بناء على نوع التطبيق
-    const fileTypes = config.analysis.fileTypes;
-
+    // الملفات المدعومة حسب نوع التطبيق
     switch (appType) {
         case 'flutter':
-            return fileTypes.flutter.includes(extension) || filePath.includes('pubspec.yaml');
-        case 'xamarin':
-            return fileTypes.xamarin.includes(extension);
-        case 'nativeAndroid':
-            return fileTypes.nativeAndroid.includes(extension);
-        case 'nativeIOS':
-            return fileTypes.nativeIOS.includes(extension);
+            // تحليل ملفات Flutter والمرتبطة بها
+            return extension === '.dart' ||
+                normalizedPath.includes('pubspec.yaml') ||
+                normalizedPath.includes('flutter') ||
+                (extension === '.yaml' && normalizedPath.includes('flutter')) ||
+                (extension === '.json' && normalizedPath.includes('flutter'));
+
         case 'reactNative':
-            return fileTypes.reactNative.includes(extension);
+            // تحليل ملفات React Native الأساسية
+            return ['.js', '.jsx', '.ts', '.tsx'].includes(extension) ||
+                (normalizedPath.includes('package.json') && !normalizedPath.includes('node_modules')) ||
+                normalizedPath.includes('app.json') ||
+                normalizedPath.includes('react-native.config.js');
+
+        case 'xamarin':
+            // تحليل ملفات Xamarin الأساسية
+            return ['.cs', '.xaml', '.xml'].includes(extension) ||
+                normalizedPath.includes('.csproj') ||
+                normalizedPath.includes('manifest') ||
+                normalizedPath.includes('info.plist');
+
+        case 'nativeAndroid':
+            // تحليل ملفات Android الأساسية
+            return ['.java', '.kt', '.xml'].includes(extension) ||
+                normalizedPath.includes('manifest') ||
+                normalizedPath.includes('gradle') ||
+                normalizedPath.includes('/res/') ||
+                normalizedPath.includes('/assets/');
+
+        case 'nativeIOS':
+            // تحليل ملفات iOS الأساسية
+            return ['.swift', '.m', '.h', '.storyboard', '.xib'].includes(extension) ||
+                normalizedPath.includes('info.plist') ||
+                normalizedPath.includes('appdelegate') ||
+                normalizedPath.includes('/assets/');
+
         default:
-            // إذا كان نوع التطبيق غير معروف، نقوم بتحليل جميع ملفات الكود
-            return ['.java', '.kt', '.swift', '.m', '.h', '.cs', '.dart', '.js', '.jsx', '.ts', '.tsx', '.xaml', '.xml'].includes(extension);
+            // إذا كان النوع غير معروف، نحلل الملفات الشائعة في تطبيقات الموبايل
+            const commonExtensions = [
+                '.java', '.kt', '.swift', '.m', '.h', '.cs', '.dart',
+                '.js', '.jsx', '.ts', '.tsx', '.xaml', '.xml', '.gradle',
+                '.plist', '.yaml', '.json'
+            ];
+
+            return commonExtensions.includes(extension) ||
+                normalizedPath.includes('manifest') ||
+                normalizedPath.includes('info.plist') ||
+                normalizedPath.includes('build.gradle') ||
+                normalizedPath.includes('pubspec.yaml') ||
+                normalizedPath.includes('package.json');
     }
 }
 
@@ -160,7 +200,15 @@ function shouldAnalyzeFile(filePath, appType) {
  * @returns {boolean} صحيح إذا كان حجم الملف مناسب للتحليل
  */
 function isFileSizeAcceptable(file) {
-    return file.size <= config.analysis.maxFileSize;
+    // زيادة الحد الأقصى لحجم الملف للملفات المهمة
+    const maxSize = file.path.toLowerCase().includes('manifest') ||
+    file.path.toLowerCase().includes('gradle') ||
+    file.path.toLowerCase().includes('pubspec.yaml') ||
+    file.path.toLowerCase().includes('package.json')
+        ? config.analysis.maxFileSize * 2 // مضاعفة الحد للملفات المهمة
+        : config.analysis.maxFileSize;
+
+    return file.size <= maxSize;
 }
 
 /**

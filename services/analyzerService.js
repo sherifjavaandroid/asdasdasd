@@ -100,6 +100,7 @@ class AnalyzerService {
             const files = await githubService.getAllRepositoryFiles(
                 repoInfo.owner,
                 repoInfo.repo,
+
                 repoInfo.defaultBranch,
                 'unknown', // سنكتشف نوع التطبيق بعد الحصول على الملفات
                 maxFilesPerRepo

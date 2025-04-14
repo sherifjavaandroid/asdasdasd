@@ -222,7 +222,7 @@ class GitHubService {
     }
 
     /**
-     * استرجاع جميع ملفات المستودع بشكل متكرر
+     * استرجاع جميع ملفات المستودع بشكل متكرر مع تحسينات للكشف عن أنواع التطبيقات
      * @param {string} owner - اسم مالك المستودع
      * @param {string} repo - اسم المستودع
      * @param {string} branch - الفرع
@@ -231,47 +231,128 @@ class GitHubService {
      * @returns {Promise<Array>} مصفوفة بالملفات
      */
     async getAllRepositoryFiles(owner, repo, branch, appType, maxFiles = null) {
+        // تعديل الحد الأقصى لعدد الملفات بناءً على نوع التطبيق
+        let maxFilesToFetch = maxFiles || config.analysis.maxFilesPerRepo;
+        // زيادة العدد الافتراضي للملفات لضمان رؤية جميع ملفات التطبيق
+        if (appType === 'unknown') {
+            maxFilesToFetch = Math.max(maxFilesToFetch, 200); // زيادة العدد للتأكد من اكتشاف النوع بشكل صحيح
+        }
+
         const files = [];
+        const processedPaths = new Set(); // لتجنب معالجة نفس المسار مرتين
         let fileCount = 0;
-        const maxFilesToFetch = maxFiles || config.analysis.maxFilesPerRepo;
 
         // قائمة الأدلة التي تم تخطيها
-        const skippedDirs = ['.git', 'node_modules', 'build', 'dist', 'bin', 'obj', 'packages', '.gradle', '.dart_tool', '.idea', '.vscode'];
+        const skippedDirs = [
+            '.git', 'node_modules', 'build', 'dist', 'bin', 'obj',
+            'packages', '.gradle', '.dart_tool', '.idea', '.vscode'
+        ];
 
-        // قائمة امتدادات الملفات المهمة حسب الأولوية
-        const priorityExtensions = this.getPriorityExtensions(appType);
-
-        // استخدام قائمة مؤقتة لتخزين كل الملفات قبل الفلترة
-        const allPotentialFiles = [];
+        // قائمة الأدلة ذات الأولوية حسب نوع التطبيق
+        let priorityDirs = [];
+        if (appType === 'flutter' || appType === 'unknown') {
+            priorityDirs.push('lib', 'android/app/src', 'ios/Runner', 'pubspec.yaml');
+        }
+        if (appType === 'reactNative' || appType === 'unknown') {
+            priorityDirs.push('src', 'app', 'components', 'screens', 'package.json', 'index.js');
+        }
+        if (appType === 'nativeAndroid' || appType === 'unknown') {
+            priorityDirs.push('app/src/main', 'AndroidManifest.xml', 'java', 'kotlin');
+        }
+        if (appType === 'nativeIOS' || appType === 'unknown') {
+            priorityDirs.push('ViewController', 'AppDelegate', 'Info.plist');
+        }
+        if (appType === 'xamarin' || appType === 'unknown') {
+            priorityDirs.push('Forms', 'Xamarin.Forms', '.csproj');
+        }
 
         // دالة مساعدة متكررة لجمع الملفات
-        const fetchContentsRecursively = async (path = '', depth = 0, maxDepth = 5) => {
+        const fetchContentsRecursively = async (path = '', depth = 0, maxDepth = 6) => {
+            // إذا كان العمق أكبر من الحد الأقصى، توقف
+            if (depth > maxDepth || fileCount >= maxFilesToFetch) {
+                return;
+            }
+
+            // تسجيل المسار كمعالج
+            if (processedPaths.has(path)) {
+                return; // تجنب المسارات المكررة
+            }
+            processedPaths.add(path);
+
+            // التحقق مما إذا كان المسار يحتوي على أي من الأدلة التي يجب تخطيها
+            if (path !== '' && skippedDirs.some(dir =>
+                path.includes(`/${dir}/`) || path === dir || path.endsWith(`/${dir}`))) {
+                logger.debug(`تخطي مسار: ${path} (ضمن الأدلة المتجاهلة)`);
+                return;
+            }
+
             try {
-                // إذا كان العمق أكبر من الحد الأقصى، أو تم الوصول بالفعل إلى العدد المطلوب من الملفات، توقف
-                if (depth > maxDepth || allPotentialFiles.length >= maxFilesToFetch * 2) {
-                    return;
-                }
-
-                // التحقق مما إذا كان المسار يحتوي على أي من الأدلة التي يجب تخطيها
-                if (skippedDirs.some(dir => path.includes(`/${dir}/`) || path === dir)) {
-                    return;
-                }
-
                 const contents = await this.getRepositoryContents(owner, repo, path, branch);
 
-                for (const item of contents) {
-                    // تخطي الأدلة والملفات غير المهمة
-                    if (skippedDirs.some(dir => item.path.includes(`/${dir}/`) || item.path.startsWith(dir + '/'))) {
-                        continue;
+                // تصفية العناصر المستبعدة من الأدلة المتجاهلة
+                const filteredContents = contents.filter(item =>
+                    !skippedDirs.some(dir =>
+                        item.path.includes(`/${dir}/`) ||
+                        item.path === dir ||
+                        item.path.endsWith(`/${dir}`)
+                    )
+                );
+
+                // ترتيب العناصر بناءً على الأولوية
+                filteredContents.sort((a, b) => {
+                    const aIsPriority = priorityDirs.some(dir => a.path.includes(dir));
+                    const bIsPriority = priorityDirs.some(dir => b.path.includes(dir));
+                    if (aIsPriority && !bIsPriority) return -1;
+                    if (!aIsPriority && bIsPriority) return 1;
+                    return 0;
+                });
+
+                // قائمة المسارات للاستكشاف لاحقًا
+                const dirsToExplore = [];
+
+                // معالجة جميع العناصر
+                for (const item of filteredContents) {
+                    if (fileCount >= maxFilesToFetch) {
+                        logger.warn(`تم الوصول إلى الحد الأقصى لعدد الملفات (${maxFilesToFetch})`);
+                        break;
                     }
 
                     if (item.type === 'dir') {
-                        // استكشاف الدليل بشكل متكرر، مع زيادة العمق
-                        await fetchContentsRecursively(item.path, depth + 1, maxDepth);
+                        // إذا كان المسار له أولوية، نضيفه في بداية القائمة
+                        if (priorityDirs.some(dir => item.path.includes(dir))) {
+                            dirsToExplore.unshift(item.path);
+                        } else {
+                            dirsToExplore.push(item.path);
+                        }
                     } else if (item.type === 'file') {
-                        // حفظ الملف المحتمل للتقييم لاحقًا
-                        allPotentialFiles.push(item);
+                        // التحقق من أن الملف يستحق التحليل وليس كبيرًا جدًا
+                        const isAnalyzable = shouldAnalyzeFile(item.path, appType) && isFileSizeAcceptable(item);
+                        if (isAnalyzable || fileCount < 20) { // جمع بعض الملفات العامة في البداية للاكتشاف
+                            try {
+                                // الحصول على محتوى الملف
+                                const fileContent = await this.getFileContent(item);
+
+                                files.push({
+                                    name: item.name,
+                                    path: item.path,
+                                    size: item.size,
+                                    content: fileContent,
+                                    download_url: item.download_url,
+                                    url: item.url,
+                                });
+
+                                fileCount++;
+                            } catch (fileError) {
+                                logger.error(`فشل الحصول على محتوى الملف ${item.path}: ${fileError.message}`);
+                            }
+                        }
                     }
+                }
+
+                // استكشاف المسارات الفرعية
+                for (const dirPath of dirsToExplore) {
+                    if (fileCount >= maxFilesToFetch) break;
+                    await fetchContentsRecursively(dirPath, depth + 1, maxDepth);
                 }
             } catch (error) {
                 // سجل الخطأ لكن استمر في الاستكشاف
@@ -279,112 +360,37 @@ class GitHubService {
             }
         };
 
-        // بدء الاستكشاف من جذر المستودع
+        // بدء الاستكشاف من جذر المستودع أولاً للملفات المهمة في الجذر
         await fetchContentsRecursively('');
 
-        logger.info(`تم العثور على ${allPotentialFiles.length} ملف محتمل قبل الفلترة`);
-
-        // فرز الملفات حسب الأولوية (امتدادات مهمة أولاً)
-        allPotentialFiles.sort((a, b) => {
-            const extA = path.extname(a.path).toLowerCase();
-            const extB = path.extname(b.path).toLowerCase();
-
-            const priorityA = priorityExtensions[extA] || 999;
-            const priorityB = priorityExtensions[extB] || 999;
-
-            return priorityA - priorityB;
-        });
-
-        // تصفية الملفات حسب المعايير وإضافتها إلى القائمة النهائية
-        for (const item of allPotentialFiles) {
-            if (fileCount >= maxFilesToFetch) {
-                logger.warn(`تم الوصول إلى الحد الأقصى لعدد الملفات (${maxFilesToFetch})`);
-                break;
-            }
-
-            if (shouldAnalyzeFile(item.path, appType) && isFileSizeAcceptable(item)) {
-                try {
-                    // الحصول على محتوى الملف
-                    const fileContent = await this.getFileContent(item);
-
-                    files.push({
-                        name: item.name,
-                        path: item.path,
-                        size: item.size,
-                        content: fileContent,
-                        download_url: item.download_url,
-                        url: item.url,
-                    });
-
-                    fileCount++;
-                } catch (fileError) {
-                    logger.error(`فشل الحصول على محتوى الملف ${item.path}: ${fileError.message}`);
+        // استكشاف المسارات ذات الأولوية بشكل صريح إذا لم نتمكن من العثور على ملفات كافية
+        if (files.length < 10 && priorityDirs.length > 0) {
+            for (const dir of priorityDirs) {
+                if (!processedPaths.has(dir) && fileCount < maxFilesToFetch) {
+                    logger.info(`استكشاف مسار ذات أولوية: ${dir}`);
+                    await fetchContentsRecursively(dir, 0, 6);
                 }
             }
         }
 
         logger.info(`تم الحصول على ${files.length} ملف للتحليل`);
-        return files;
-    }
 
-    /**
-     * الحصول على قائمة امتدادات الملفات ذات الأولوية حسب نوع التطبيق
-     * @param {string} appType - نوع تطبيق الموبايل
-     * @returns {Object} كائن يحتوي على امتدادات الملفات وأولوياتها
-     */
-    getPriorityExtensions(appType) {
-        const priorities = {};
+        // تحديث appType بناءً على الملفات المكتشفة إذا كان "unknown"
+        if (appType === 'unknown' && files.length > 0) {
+            const { detectMobileAppType } = require('../utils/helpers');
+            const detectedAppType = detectMobileAppType(files);
+            if (detectedAppType !== 'unknown') {
+                logger.info(`تم اكتشاف نوع التطبيق بناءً على الملفات المجموعة: ${detectedAppType}`);
+                appType = detectedAppType;
 
-        // امتدادات عامة مهمة
-        priorities['.xml'] = 10;
-        priorities['.gradle'] = 20;
-        priorities['.json'] = 30;
-
-        // امتدادات مخصصة حسب نوع التطبيق
-        switch (appType) {
-            case 'flutter':
-                priorities['.dart'] = 1;
-                priorities['.yaml'] = 5;
-                break;
-
-            case 'reactNative':
-                priorities['.js'] = 1;
-                priorities['.jsx'] = 2;
-                priorities['.ts'] = 3;
-                priorities['.tsx'] = 4;
-                break;
-
-            case 'nativeAndroid':
-                priorities['.java'] = 1;
-                priorities['.kt'] = 2;
-                priorities['.gradle'] = 5;
-                break;
-
-            case 'nativeIOS':
-                priorities['.swift'] = 1;
-                priorities['.m'] = 2;
-                priorities['.h'] = 3;
-                priorities['.plist'] = 5;
-                break;
-
-            case 'xamarin':
-                priorities['.cs'] = 1;
-                priorities['.xaml'] = 2;
-                priorities['.xml'] = 5;
-                break;
-
-            default:
-                // إذا كان نوع التطبيق غير معروف، استخدم ترتيب عام
-                priorities['.java'] = 1;
-                priorities['.kt'] = 2;
-                priorities['.swift'] = 3;
-                priorities['.dart'] = 4;
-                priorities['.js'] = 5;
-                priorities['.ts'] = 6;
-                priorities['.cs'] = 7;
+                // إعادة فلترة الملفات بناء على النوع المكتشف
+                const filteredFiles = files.filter(file => shouldAnalyzeFile(file.path, appType));
+                logger.info(`بعد فلترة الملفات بناء على النوع المكتشف: ${filteredFiles.length} ملف للتحليل`);
+                return filteredFiles;
+            }
         }
 
-        return priorities;
+        return files;
     }
 
     /**

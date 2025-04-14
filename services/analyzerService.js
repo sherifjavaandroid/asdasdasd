@@ -7,7 +7,6 @@ const llamaService = require('./llamaService');
 const { detectMobileAppType } = require('../utils/helpers');
 const Report = require('../models/Report');
 const config = require('../config/config');
-// في بداية ملف analyzerService.js، نضيف:
 const securityAnalyzer = require('./securityAnalyzer');
 const batteryAnalyzer = require('./batteryAnalyzer');
 const performanceAnalyzer = require('./performanceAnalyzer');

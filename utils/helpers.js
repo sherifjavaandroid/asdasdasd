@@ -10,79 +10,138 @@ const config = require('../config/config');
  * @param {Array} files - قائمة بالملفات في المستودع
  * @returns {string} نوع تطبيق الموبايل أو 'unknown' إذا لم يتم التعرف عليه
  */
+/**
+ * تحديد نوع تطبيق الموبايل بناء على محتوى المستودع
+ * @param {Array} files - قائمة بالملفات في المستودع
+ * @returns {string} نوع تطبيق الموبايل أو 'unknown' إذا لم يتم التعرف عليه
+ */
 function detectMobileAppType(files) {
     // تجميع جميع مسارات الملفات للتسهيل
     const filePaths = files.map(file => file.path.toLowerCase());
+    const fileContents = new Map(files.map(file => [file.path.toLowerCase(), file.content || '']));
 
-    // التحقق من وجود ملفات Flutter
-    const hasFlutterFiles = filePaths.some(path =>
-        path.includes('pubspec.yaml') ||
-        path.endsWith('.dart') ||
-        path.includes('/lib/') ||
-        path.includes('flutter')
-    );
+    // مُعرِّفات للمنصات المختلفة
+    let flutterScore = 0;
+    let reactNativeScore = 0;
+    let xamarinScore = 0;
+    let nativeAndroidScore = 0;
+    let nativeIOSScore = 0;
 
-    if (hasFlutterFiles) {
-        return 'flutter';
+    // البحث عن ملفات Flutter
+    for (const path of filePaths) {
+        if (path.includes('pubspec.yaml')) {
+            const content = fileContents.get(path) || '';
+            if (content.includes('flutter:') || content.includes('sdk: flutter')) {
+                flutterScore += 10; // مؤشر قوي جدًا
+            }
+        }
+        if (path.endsWith('.dart')) flutterScore += 2;
+        if (path.includes('/lib/')) flutterScore += 1;
+        if (path.includes('flutter') && !path.includes('flutter_test')) flutterScore += 1;
+        if (path.includes('android/app/src') && path.includes('MainActivity')) flutterScore += 1;
+        if (path.includes('ios/Runner')) flutterScore += 1;
     }
 
-    // التحقق من وجود ملفات React Native
-    const hasReactNativeFiles = filePaths.some(path =>
-        (path.includes('package.json') && files.find(f => f.path === path)?.content?.includes('react-native')) ||
-        path.includes('react-native.config.js') ||
-        path.includes('app.json') ||
-        (path.includes('index.js') && files.find(f => f.path === path)?.content?.includes('AppRegistry'))
-    );
-
-    if (hasReactNativeFiles) {
-        return 'reactNative';
+    // البحث عن ملفات React Native
+    for (const path of filePaths) {
+        if (path.includes('package.json')) {
+            const content = fileContents.get(path) || '';
+            if (content.includes('react-native')) {
+                reactNativeScore += 10; // مؤشر قوي جدًا
+            }
+        }
+        if (path.includes('app.json') && fileContents.get(path)?.includes('expo')) reactNativeScore += 5;
+        if (path.includes('react-native.config.js')) reactNativeScore += 5;
+        if (path.includes('index.js') && fileContents.get(path)?.includes('AppRegistry')) reactNativeScore += 5;
+        if (path.endsWith('.jsx') || path.endsWith('.tsx')) reactNativeScore += 2;
+        if (path.includes('android/app/src/main/java') && path.includes('MainActivity')) reactNativeScore += 1;
+        if (path.includes('ios/') && path.includes('AppDelegate')) reactNativeScore += 1;
+        if (path.includes('node_modules/react-native')) reactNativeScore += 1;
     }
 
-    // التحقق من وجود ملفات Xamarin
-    const hasXamarinFiles = filePaths.some(path =>
-        path.includes('.csproj') ||
-        path.endsWith('.xaml') ||
-        path.includes('xamarin') ||
-        (path.endsWith('.cs') && (path.includes('/forms/') || path.includes('/android/') || path.includes('/ios/')))
-    );
-
-    if (hasXamarinFiles) {
-        return 'xamarin';
+    // البحث عن ملفات Xamarin
+    for (const path of filePaths) {
+        if (path.endsWith('.csproj')) {
+            const content = fileContents.get(path) || '';
+            if (content.includes('Xamarin') || content.includes('<TargetFrameworkVersion>v') || content.includes('Microsoft.NET.Sdk')) {
+                xamarinScore += 10; // مؤشر قوي جدًا
+            }
+        }
+        if (path.endsWith('.xaml')) xamarinScore += 3;
+        if (path.endsWith('.cs') && (path.includes('/Forms/') || path.includes('/Android/') || path.includes('/iOS/'))) xamarinScore += 2;
+        if (path.includes('xamarin') || path.includes('Xamarin')) xamarinScore += 2;
+        if (path.includes('MainActivity.cs') || path.includes('AppDelegate.cs')) xamarinScore += 3;
+        if (path.includes('Info.plist') && path.includes('iOS')) xamarinScore += 1;
+        if (path.includes('AndroidManifest.xml') && path.includes('Android')) xamarinScore += 1;
     }
 
-    // التحقق من وجود ملفات Native Android
-    const hasNativeAndroidFiles = filePaths.some(path =>
-        path.includes('androidmanifest.xml') ||
-        path.includes('/res/layout/') ||
-        path.includes('/res/values/') ||
-        path.includes('build.gradle') ||
-        path.endsWith('.java') ||
-        path.endsWith('.kt')
-    );
-
-    if (hasNativeAndroidFiles) {
-        return 'nativeAndroid';
+    // البحث عن ملفات Native Android
+    for (const path of filePaths) {
+        if (path.includes('androidmanifest.xml')) nativeAndroidScore += 8;
+        if (path.includes('build.gradle')) {
+            const content = fileContents.get(path) || '';
+            if (content.includes('com.android.application') || content.includes('com.android.library')) {
+                nativeAndroidScore += 8; // مؤشر قوي
+            }
+        }
+        if (path.includes('/res/layout/')) nativeAndroidScore += 3;
+        if (path.includes('/res/values/')) nativeAndroidScore += 2;
+        if (path.includes('/src/main/java/') || path.includes('/src/main/kotlin/')) nativeAndroidScore += 3;
+        if (path.endsWith('.java') && !path.includes('flutter') && !path.includes('react-native')) nativeAndroidScore += 2;
+        if (path.endsWith('.kt') && !path.includes('flutter') && !path.includes('react-native')) nativeAndroidScore += 2;
+        if (path.includes('MainActivity') || path.includes('Application.java') || path.includes('Application.kt')) nativeAndroidScore += 2;
     }
 
-    // التحقق من وجود ملفات Native iOS
-    const hasNativeIOSFiles = filePaths.some(path =>
-        path.includes('info.plist') ||
-        path.includes('appdelegate.') ||
-        path.includes('xcodeproj') ||
-        path.includes('xcworkspace') ||
-        path.endsWith('.swift') ||
-        path.endsWith('.m') ||
-        path.endsWith('.h')
-    );
-
-    if (hasNativeIOSFiles) {
-        return 'nativeIOS';
+    // البحث عن ملفات Native iOS
+    for (const path of filePaths) {
+        if (path.includes('info.plist') && path.includes('ios/') && !path.includes('flutter') && !path.includes('react-native')) nativeIOSScore += 5;
+        if (path.includes('appdelegate.') && !path.includes('flutter') && !path.includes('react-native')) nativeIOSScore += 5;
+        if (path.includes('xcodeproj') || path.includes('xcworkspace')) nativeIOSScore += 3;
+        if (path.endsWith('.swift') && !path.includes('flutter') && !path.includes('react-native')) nativeIOSScore += 3;
+        if (path.endsWith('.m') || path.endsWith('.h')) nativeIOSScore += 2;
+        if (path.includes('ViewController') || path.includes('SceneDelegate')) nativeIOSScore += 2;
+        if (path.includes('Base.lproj') || path.includes('LaunchScreen.storyboard')) nativeIOSScore += 2;
+        if (path.includes('Podfile') && !path.includes('flutter') && !path.includes('react-native')) nativeIOSScore += 3;
     }
 
-    // غير معروف
+    // تعديل النتائج لتفادي التداخل
+    // إذا كان هناك ملفات أندرويد و iOS ولكن هناك علامات Flutter/React Native، خفض نتيجة Native
+    if (flutterScore > 5 || reactNativeScore > 5) {
+        nativeAndroidScore = Math.max(0, nativeAndroidScore - 5);
+        nativeIOSScore = Math.max(0, nativeIOSScore - 5);
+    }
+
+    // إذا كان هناك علامات Xamarin، خفض نتيجة Native Android/iOS
+    if (xamarinScore > 5) {
+        nativeAndroidScore = Math.max(0, nativeAndroidScore - 3);
+        nativeIOSScore = Math.max(0, nativeIOSScore - 3);
+    }
+
+    // جمع النتائج وتحديد النوع الأكثر احتمالاً
+    const scores = {
+        'flutter': flutterScore,
+        'reactNative': reactNativeScore,
+        'xamarin': xamarinScore,
+        'nativeAndroid': nativeAndroidScore,
+        'nativeIOS': nativeIOSScore
+    };
+
+    // البحث عن النوع ذو النتيجة الأعلى
+    const maxScore = Math.max(...Object.values(scores));
+
+    // إذا كانت النتيجة الأعلى أقل من حد أدنى، اعتبر النوع غير معروف
+    if (maxScore < 5) {
+        return 'unknown';
+    }
+
+    // إرجاع النوع ذو النتيجة الأعلى
+    for (const [type, score] of Object.entries(scores)) {
+        if (score === maxScore) return type;
+    }
+
+    // تأكيد نهائي، إذا وصلنا هنا، فالنوع غير معروف
     return 'unknown';
 }
-
 /**
  * التحقق من صحة رابط مستودع GitHub
  * @param {string} repoUrl - رابط المستودع
@@ -118,6 +177,12 @@ function extractRepoInfo(repoUrl) {
  * @param {string} appType - نوع تطبيق الموبايل
  * @returns {boolean} صحيح إذا كان يجب تحليل الملف
  */
+/**
+ * التحقق مما إذا كان يجب تحليل الملف بناءً على امتداده والمسار ونوع التطبيق
+ * @param {string} filePath - مسار الملف
+ * @param {string} appType - نوع تطبيق الموبايل
+ * @returns {boolean} صحيح إذا كان يجب تحليل الملف
+ */
 function shouldAnalyzeFile(filePath, appType) {
     // تحويل المسار إلى حروف صغيرة للمقارنة بشكل أفضل
     const normalizedPath = filePath.toLowerCase();
@@ -125,20 +190,49 @@ function shouldAnalyzeFile(filePath, appType) {
 
     // استبعاد الملفات والمجلدات العامة
     const excludedPatterns = [
-        '.git', '.github', 'node_modules', 'build', 'dist', '.gradle',
-        '.idea', '.vscode', '.dart_tool', '/pods/', '/build/',
+        '.git', '.github', 'node_modules', 'build/generated', 'build/intermediates', '.gradle',
+        '.idea', '.vscode', '.dart_tool', '/pods/',
         '.ds_store', 'thumbs.db', '.gitignore', 'license', 'readme',
         'yarn.lock', 'package-lock.json', 'podfile.lock', '.classpath',
         '.project', '.settings', 'gradlew', 'gradlew.bat', '.iml',
         'proguard-rules.pro', '.pbxproj'
     ];
 
-    // التحقق من استبعاد المسارات العامة
-    if (excludedPatterns.some(pattern => normalizedPath.includes(pattern))) {
+    // لا تستبعد هذه المجلدات لأنها قد تحتوي على ملفات المصدر الهامة
+    // 'build', 'dist', '/build/'
+
+    // التحقق من استبعاد المسارات العامة - تحسين الشرط لتجنب استبعاد مجلدات مهمة
+    if (excludedPatterns.some(pattern => {
+        // تأكد من عدم استبعاد مجلدات المصدر المهمة
+        if (pattern === 'build' && (normalizedPath.includes('/build/src/') || normalizedPath.includes('/build/java/'))) {
+            return false;
+        }
+        return normalizedPath.includes(pattern);
+    })) {
         return false;
     }
 
-    // الملفات المدعومة حسب نوع التطبيق
+    // للملفات Java و Kotlin، تأكد من تضمينها دائمًا للتحليل في تطبيقات أندرويد الأصلية
+    if (appType === 'nativeAndroid') {
+        // التحقق بشكل صريح من ملفات Java و Kotlin
+        if (extension === '.java' || extension === '.kt') {
+            // استثناء ملفات الاختبار فقط
+            if (normalizedPath.includes('/test/') || normalizedPath.includes('/androidtest/')) {
+                return false;
+            }
+            return true; // تضمين جميع ملفات Java و Kotlin الأخرى
+        }
+
+        // متابعة التحليل لأنواع الملفات الأخرى المهمة لأندرويد
+        return extension === '.xml' ||
+            normalizedPath.includes('manifest') ||
+            normalizedPath.includes('gradle') ||
+            normalizedPath.includes('/res/') ||
+            normalizedPath.includes('/assets/') ||
+            normalizedPath.includes('/src/main/');
+    }
+
+    // المنطق الموجود مسبقًا للمنصات الأخرى...
     switch (appType) {
         case 'flutter':
             // تحليل ملفات Flutter والمرتبطة بها
@@ -161,14 +255,6 @@ function shouldAnalyzeFile(filePath, appType) {
                 normalizedPath.includes('.csproj') ||
                 normalizedPath.includes('manifest') ||
                 normalizedPath.includes('info.plist');
-
-        case 'nativeAndroid':
-            // تحليل ملفات Android الأساسية
-            return ['.java', '.kt', '.xml'].includes(extension) ||
-                normalizedPath.includes('manifest') ||
-                normalizedPath.includes('gradle') ||
-                normalizedPath.includes('/res/') ||
-                normalizedPath.includes('/assets/');
 
         case 'nativeIOS':
             // تحليل ملفات iOS الأساسية
@@ -193,7 +279,6 @@ function shouldAnalyzeFile(filePath, appType) {
                 normalizedPath.includes('package.json');
     }
 }
-
 /**
  * فلترة الملفات بناء على أقصى حجم مسموح به
  * @param {Object} file - معلومات الملف

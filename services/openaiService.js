@@ -348,7 +348,6 @@ class OpenAIService {
         // تعريف دالة delay لتفادي الخطأ "this.delay is not a function"
         this.delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     }
-
     /**
      * تحليل الكود باستخدام OpenAI API
      * @param {string} code - الكود المراد تحليله

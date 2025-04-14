@@ -115,12 +115,21 @@ class AnalyzerService {
             const analysisTypes = options.analysisTypes || ['security', 'performance', 'memory', 'battery'];
             logger.info(`🔬 أنواع التحليل المطلوبة: ${analysisTypes.join(', ')}`);
 
-            // معالجة الملفات وتحليلها - AQUÍ ESTÁ EL ERROR CORREGIDO
-            // Cambiamos de analyzeFile a analyzeFiles
-            await this.analyzeFiles(files, appType, analysisTypes, report, options);
+            // تحديد أسلوب التحليل (محلي فقط أو محلي + ذكاء اصطناعي)
+            const analysisMode = options.analysisMode || 'local_ai'; // القيمة الافتراضية هي الجمع بين التحليل المحلي ونماذج الذكاء الاصطناعي
+            logger.info(`🔬 أسلوب التحليل المختار: ${analysisMode === 'local' ? 'محلي فقط' : 'محلي + ذكاء اصطناعي'}`);
 
-            // معالجة الطلبات المؤجلة
-            if (this.deferredRequests.length > 0) {
+            // تحديث خيارات التحليل بأسلوب التحليل
+            const analysisOptions = {
+                ...options,
+                analysisMode
+            };
+
+            // معالجة الملفات وتحليلها
+            await this.analyzeFiles(files, appType, analysisTypes, report, analysisOptions);
+
+            // معالجة الطلبات المؤجلة - فقط في حالة التحليل بالذكاء الاصطناعي
+            if (analysisMode === 'local_ai' && this.deferredRequests.length > 0) {
                 logger.info(`⏳ بدء معالجة ${this.deferredRequests.length} طلبات مؤجلة`);
                 await this.processDeferredRequests(report);
             }
@@ -239,12 +248,33 @@ class AnalyzerService {
      * @param {Report} report - تقرير التحليل
      * @param {Object} options - خيارات إضافية
      */
+    /**
+     * تحليل مجموعة من الملفات
+     * @param {Array} files - قائمة بالملفات
+     * @param {string} appType - نوع تطبيق الموبايل
+     * @param {Array} analysisTypes - أنواع التحليل المطلوبة
+     * @param {Report} report - تقرير التحليل
+     * @param {Object} options - خيارات إضافية
+     */
+    /**
+     * تحليل مجموعة من الملفات
+     * @param {Array} files - قائمة بالملفات
+     * @param {string} appType - نوع تطبيق الموبايل
+     * @param {Array} analysisTypes - أنواع التحليل المطلوبة
+     * @param {Report} report - تقرير التحليل
+     * @param {Object} options - خيارات إضافية
+     */
     async analyzeFiles(files, appType, analysisTypes, report, options = {}) {
         const startTime = Date.now();
+
+        // استخراج أسلوب التحليل من الخيارات
+        const analysisMode = options.analysisMode || 'local_ai';
+
         logger.info(`📊 بدء تحليل مجموعة الملفات`);
         logger.info(`   📁 عدد الملفات: ${files.length}, وقت البدء: ${new Date().toISOString()}`);
         logger.info(`   🔍 أنواع التحليل: ${analysisTypes.join(', ')}`);
         logger.info(`   📱 نوع التطبيق: ${appType}`);
+        logger.info(`   🔬 أسلوب التحليل: ${analysisMode === 'local' ? 'محلي فقط' : 'محلي + ذكاء اصطناعي'}`);
 
         // تقسيم الملفات حسب اللغة البرمجية لتخصيص توزيع المهام بشكل أفضل
         const filesByLanguage = this.categorizeFilesByLanguage(files);
@@ -257,16 +287,37 @@ class AnalyzerService {
             }
         });
 
-        // تقسيم الملفات إلى مجموعات لكل خدمة تحليل
-        const distributedFiles = this.distributeFilesByService(filesByLanguage);
+        // تقسيم الملفات إلى مجموعات لكل خدمة تحليل (فقط إذا كان أسلوب التحليل يتضمن الذكاء الاصطناعي)
+        let distributedFiles = {};
 
-        // سجل عدد الملفات لكل خدمة
-        logger.info(`🔄 توزيع الملفات على خدمات التحليل:`);
-        Object.entries(distributedFiles).forEach(([service, serviceFiles]) => {
-            if (serviceFiles.length > 0) {
-                logger.info(`   ${service}: ${serviceFiles.length} ملف`);
-            }
-        });
+        if (analysisMode === 'local_ai') {
+            distributedFiles = this.distributeFilesByService(filesByLanguage);
+
+            // سجل عدد الملفات لكل خدمة
+            logger.info(`🔄 توزيع الملفات على خدمات التحليل:`);
+            Object.entries(distributedFiles).forEach(([service, serviceFiles]) => {
+                if (serviceFiles.length > 0) {
+                    logger.info(`   ${service}: ${serviceFiles.length} ملف`);
+                }
+            });
+        } else {
+            // في حالة التحليل المحلي فقط، نجمع كل الملفات في قائمة واحدة
+            distributedFiles = {
+                local: [
+                    ...filesByLanguage.java,
+                    ...filesByLanguage.kotlin,
+                    ...filesByLanguage.swift,
+                    ...filesByLanguage.objectiveC,
+                    ...filesByLanguage.dart,
+                    ...filesByLanguage.javascript,
+                    ...filesByLanguage.typescript,
+                    ...filesByLanguage.csharp,
+                    ...filesByLanguage.xml,
+                    ...filesByLanguage.other
+                ]
+            };
+            logger.info(`🔄 تحليل محلي فقط: ${distributedFiles.local.length} ملف`);
+        }
 
         const totalFilesCount = Object.values(distributedFiles).reduce((sum, files) => sum + files.length, 0);
         let analysedFilesCount = 0;
@@ -300,7 +351,12 @@ class AnalyzerService {
                     // معالجة كل نوع تحليل على حدة لهذا الملف
                     for (const analysisType of analysisTypes) {
                         try {
-                            await this.analyzeFile(file, language, analysisType, appType, report, serviceName);
+                            // تمرير خيارات التحليل التي تتضمن أسلوب التحليل
+                            await this.analyzeFile(file, language, analysisType, appType, report, {
+                                ...options,
+                                preferredService: serviceName !== 'local' ? serviceName : 'openai'
+                            });
+
                             // إضافة تأخير قصير بين أنواع التحليل المختلفة لنفس الملف
                             await this.delay(1000);
                         } catch (analysisError) {
@@ -344,13 +400,29 @@ class AnalyzerService {
      * @param {Report} report - تقرير التحليل
      * @param {string} preferredService - خدمة التحليل المفضلة
      */
-    async analyzeFile(file, language, analysisType, appType, report, preferredService = 'openai') {
+    /**
+     * تحليل ملف واحد
+     * @param {Object} file - معلومات الملف
+     * @param {string} language - لغة البرمجة
+     * @param {string} analysisType - نوع التحليل
+     * @param {string} appType - نوع تطبيق الموبايل
+     * @param {Report} report - تقرير التحليل
+     * @param {Object} options - خيارات التحليل
+     * @returns {Promise<Object>} نتائج التحليل
+     */
+
+    async analyzeFile(file, language, analysisType, appType, report, options = {}) {
         const fileAnalysisStart = Date.now();
         try {
-            logger.debug(`تحليل نوع ${analysisType} للملف: ${file.path} باستخدام ${preferredService}, وقت البدء: ${new Date(fileAnalysisStart).toISOString()}`);
+            // استخراج أسلوب التحليل من الخيارات (محلي فقط أو محلي + ذكاء اصطناعي)
+            const analysisMode = options.analysisMode || 'local_ai';
+            const preferredService = options.preferredService || 'openai';
+            logger.debug(`تحليل نوع ${analysisType} للملف: ${file.path} باستخدام أسلوب التحليل: ${analysisMode}, وقت البدء: ${new Date(fileAnalysisStart).toISOString()}`);
 
-            // إجراء تحليل محلي أولاً إذا كان نوع التحليل هو 'security'
-            // في بداية دالة analyzeFile في ملف analyzerService.js
+            // بدء التحليل المحلي أولاً لجميع الأنواع
+            let localAnalysisResults = [];
+
+            // تنفيذ التحليل المحلي بناءً على نوع التحليل
             if (analysisType === 'security') {
                 try {
                     // استدعاء محلل الأمان المحلي
@@ -372,19 +444,31 @@ class AnalyzerService {
                                 analysisTimestamp: new Date().toISOString()
                             });
                         }
+                        localAnalysisResults = securityIssues;
                         logger.info(`تم اكتشاف ${securityIssues.length} مشكلة أمان محلياً في الملف: ${file.path}`);
+                    } else {
+                        // إضافة رسالة فارغة لضمان وجود نتائج
+                        const emptyIssue = {
+                            title: 'لم يتم العثور على مشكلات أمنية',
+                            category: 'SECURITY_BEST_PRACTICE',
+                            severity: 'info',
+                            description: 'لم يتم العثور على مشكلات أمنية في هذا الملف.',
+                            recommendation: 'استمر في الممارسات الأمنية الجيدة.',
+                            filePath: file.path,
+                            lineNumber: 1,
+                            type: 'recommendation',
+                            source: 'local_analyzer',
+                            analysisTimestamp: new Date().toISOString()
+                        };
+                        report.addFinding('security', emptyIssue);
+                        localAnalysisResults = [emptyIssue];
+                        logger.info(`لم يتم العثور على مشكلات أمنية في الملف: ${file.path}`);
                     }
                 } catch (localAnalysisError) {
                     logger.error(`خطأ في التحليل المحلي للأمان: ${localAnalysisError.message}`);
-                    // نواصل التحليل باستخدام خدمات الذكاء الاصطناعي حتى في حالة فشل التحليل المحلي
                 }
-            }
-
-
-            if (analysisType === 'memory') {
+            } else if (analysisType === 'memory') {
                 try {
-                    logger.debug(`بدء تحليل الذاكرة للملف: ${file.path}, وقت البدء: ${new Date().toISOString()}`);
-
                     // استدعاء تحليل الذاكرة
                     const memoryIssues = memoryAnalyzer.analyzeMemoryPatterns(file.content, file.path, language, appType);
 
@@ -399,20 +483,32 @@ class AnalyzerService {
                                 analysisTimestamp: new Date().toISOString()
                             });
                         });
+                        localAnalysisResults = memoryIssues;
                         logger.info(`تم اكتشاف ${memoryIssues.length} مشكلة ذاكرة في الملف: ${file.path}`);
+                    } else {
+                        // إضافة رسالة فارغة لضمان وجود نتائج
+                        const emptyIssue = {
+                            title: 'لم يتم العثور على مشكلات ذاكرة',
+                            category: 'MEMORY_EFFICIENCY',
+                            severity: 'info',
+                            description: 'لم يتم العثور على مشكلات متعلقة بالذاكرة في هذا الملف.',
+                            recommendation: 'استمر في الممارسات الجيدة لإدارة الذاكرة.',
+                            filePath: file.path,
+                            lineNumber: 1,
+                            type: 'recommendation',
+                            source: 'local_analyzer',
+                            analysisTimestamp: new Date().toISOString()
+                        };
+                        report.addFinding('memory', emptyIssue);
+                        localAnalysisResults = [emptyIssue];
+                        logger.info(`لم يتم العثور على مشكلات ذاكرة في الملف: ${file.path}`);
                     }
-
-                    // يمكنك إرجاع النتيجة مباشرةً إذا كان التحليل محلياً
-                    return { findings: memoryIssues };
                 } catch (error) {
                     logger.error(`خطأ في تحليل الذاكرة للملف ${file.path}: ${error.message}`);
-                    throw error;
                 }
-            }
-
-            if (analysisType === 'battery') {
+            } else if (analysisType === 'battery') {
                 try {
-                    // Call battery analyzer
+                    // استدعاء محلل البطارية
                     const batteryIssues = batteryAnalyzer.analyzeBatteryPatterns(
                         file.content,
                         file.path,
@@ -420,7 +516,7 @@ class AnalyzerService {
                         appType
                     );
 
-                    // Add battery issues to the report
+                    // إضافة مشاكل البطارية إلى التقرير
                     if (batteryIssues && batteryIssues.length > 0) {
                         for (const finding of batteryIssues) {
                             report.addFinding('battery', {
@@ -431,16 +527,32 @@ class AnalyzerService {
                                 analysisTimestamp: new Date().toISOString()
                             });
                         }
-                        logger.info(`Found ${batteryIssues.length} battery issues in file: ${file.path}`);
+                        localAnalysisResults = batteryIssues;
+                        logger.info(`تم اكتشاف ${batteryIssues.length} مشكلة بطارية في الملف: ${file.path}`);
+                    } else {
+                        // إضافة رسالة فارغة لضمان وجود نتائج
+                        const emptyIssue = {
+                            title: 'لم يتم العثور على مشكلات بطارية',
+                            category: 'BATTERY_EFFICIENCY',
+                            severity: 'info',
+                            description: 'لم يتم العثور على مشكلات متعلقة بالبطارية في هذا الملف.',
+                            recommendation: 'استمر في الممارسات الجيدة لتوفير البطارية.',
+                            filePath: file.path,
+                            lineNumber: 1,
+                            type: 'recommendation',
+                            source: 'local_analyzer',
+                            analysisTimestamp: new Date().toISOString()
+                        };
+                        report.addFinding('battery', emptyIssue);
+                        localAnalysisResults = [emptyIssue];
+                        logger.info(`لم يتم العثور على مشكلات بطارية في الملف: ${file.path}`);
                     }
                 } catch (localAnalysisError) {
-                    logger.error(`Error in local battery analysis: ${localAnalysisError.message}`);
-                    // Continue with AI-based analysis even if local analysis fails
+                    logger.error(`خطأ في التحليل المحلي للبطارية: ${localAnalysisError.message}`);
                 }
-            }
-            if (analysisType === 'performance') {
+            } else if (analysisType === 'performance') {
                 try {
-                    // Llamar al analizador de rendimiento
+                    // استدعاء محلل الأداء
                     const performanceIssues = performanceAnalyzer.analyzePerformancePatterns(
                         file.content,
                         file.path,
@@ -448,7 +560,7 @@ class AnalyzerService {
                         appType
                     );
 
-                    // Agregar los problemas de rendimiento al informe
+                    // إضافة مشاكل الأداء إلى التقرير
                     if (performanceIssues && performanceIssues.length > 0) {
                         for (const finding of performanceIssues) {
                             report.addFinding('performance', {
@@ -459,137 +571,162 @@ class AnalyzerService {
                                 analysisTimestamp: new Date().toISOString()
                             });
                         }
-                        logger.info(`Encontrados ${performanceIssues.length} problemas de rendimiento en el archivo: ${file.path}`);
+                        localAnalysisResults = performanceIssues;
+                        logger.info(`تم اكتشاف ${performanceIssues.length} مشكلة أداء في الملف: ${file.path}`);
+                    } else {
+                        // إضافة رسالة فارغة لضمان وجود نتائج
+                        const emptyIssue = {
+                            title: 'لم يتم العثور على مشكلات أداء',
+                            category: 'PERFORMANCE_EFFICIENCY',
+                            severity: 'info',
+                            description: 'لم يتم العثور على مشكلات متعلقة بالأداء في هذا الملف.',
+                            recommendation: 'استمر في الممارسات الجيدة لتحسين الأداء.',
+                            filePath: file.path,
+                            lineNumber: 1,
+                            type: 'recommendation',
+                            source: 'local_analyzer',
+                            analysisTimestamp: new Date().toISOString()
+                        };
+                        report.addFinding('performance', emptyIssue);
+                        localAnalysisResults = [emptyIssue];
+                        logger.info(`لم يتم العثور على مشكلات أداء في الملف: ${file.path}`);
                     }
                 } catch (localAnalysisError) {
-                    logger.error(`Error en el análisis local de rendimiento: ${localAnalysisError.message}`);
-                    // Continuar con el análisis basado en IA incluso si el análisis local falla
+                    logger.error(`خطأ في التحليل المحلي للأداء: ${localAnalysisError.message}`);
                 }
             }
+
+            // سواء كان التحليل المحلي فقط أو مع الذكاء الاصطناعي، نعيد نتائج التحليل المحلي
+            const fileAnalysisDuration = (Date.now() - fileAnalysisStart) / 1000;
+            logger.debug(`تم الانتهاء من التحليل المحلي لنوع ${analysisType} للملف: ${file.path}, وقت الانتهاء: ${new Date().toISOString()}, المدة: ${fileAnalysisDuration} ثانية`);
+
+            // اذا كان التحليل المحلي فقط، نكتفي بالنتائج المحلية
+            if (analysisMode === 'local') {
+                return {
+                    findings: localAnalysisResults,
+                    summary: `التحليل المحلي: تم اكتشاف ${localAnalysisResults.length} مشكلة من نوع ${analysisType}`
+                };
+            }
+
+            // إذا كان أسلوب التحليل هو "محلي + ذكاء اصطناعي"، نتابع التحليل باستخدام نماذج الذكاء الاصطناعي
             // التحقق من معدل الطلبات والتبديل إلى خدمة أخرى إذا لزم الأمر
             let service = await this.getAvailableService(preferredService, file, language, analysisType, appType, report);
 
-            // إذا كانت الخدمة المفضلة غير متاحة، جرب الخدمات الأخرى بالترتيب
+            // إذا لم تتوفر أي خدمة، قم بتأجيل هذا الطلب للمعالجة لاحقًا
             if (!service) {
-                const allServices = ['openai', 'deepSeek', 'llama'];
-                for (const altService of allServices) {
-                    if (altService !== preferredService) {
-                        service = await this.getAvailableService(altService, file, language, analysisType, appType, report);
-                        if (service) break;
-                    }
+                logger.info(`تأجيل تحليل نوع ${analysisType} للملف: ${file.path} لعدم توفر خدمات تحليل الذكاء الاصطناعي حاليًا`);
+                this.deferRequest(file, language, analysisType, appType, report, preferredService, options);
+                return {
+                    findings: localAnalysisResults,
+                    summary: `التحليل المحلي فقط (تم تأجيل تحليل الذكاء الاصطناعي): ${localAnalysisResults.length} مشكلة محتملة`
+                };
+            }
+
+            // تنفيذ التحليل باستخدام خدمة الذكاء الاصطناعي المختارة
+            logger.info(`استخدام خدمة ${service} لتحليل نوع ${analysisType} للملف: ${file.path}`);
+
+            try {
+                // تحديث معدل الطلبات للخدمة المستخدمة
+                this.updateRateLimit(service);
+
+                let aiResult = null;
+
+                // اختيار استراتيجية التحليل المناسبة بناءً على الخدمة المتوفرة
+                if (service === 'openai') {
+                    // استخدام خدمة OpenAI للتحليل
+                    aiResult = await openaiService.analyzeCode(
+                        file.content,
+                        language,
+                        analysisType,
+                        appType,
+                        localAnalysisResults
+                    );
+                } else if (service === 'deepSeek') {
+                    // استخدام خدمة DeepSeek للتحليل (إذا كانت متاحة)
+                    aiResult = await deepSeekService.analyzeCode(
+                        file.content,
+                        language,
+                        analysisType,
+                        appType,
+                        localAnalysisResults
+                    );
+                } else if (service === 'llama') {
+                    // استخدام خدمة Llama للتحليل (إذا كانت متاحة)
+                    aiResult = await llamaService.analyzeCode(
+                        file.content,
+                        language,
+                        analysisType,
+                        appType,
+                        localAnalysisResults
+                    );
+                } else {
+                    logger.error(`خدمة تحليل غير معروفة: ${service}`);
+                    return {
+                        findings: localAnalysisResults,
+                        summary: `التحليل المحلي فقط (خدمة AI غير معروفة): ${localAnalysisResults.length} مشكلة محتملة`
+                    };
                 }
-            }
 
-            if (!service) {
-                // إذا لم تكن هناك خدمة متاحة، قم بتأجيل الطلب
-                logger.info(`لا توجد خدمة متاحة لتحليل الملف: ${file.path}، سيتم التأجيل`);
-                this.deferRequest(file, language, analysisType, appType, report, preferredService);
-                return;
-            }
-
-            logger.info(`تحليل الملف: ${file.path} باستخدام الخدمة: ${service}, نوع التحليل: ${analysisType}`);
-
-            let analysisResult = {};
-            const modelStartTime = Date.now();
-
-            switch (service) {
-                case 'openai':
-                    // تحديث معدل الطلبات
-                    this.updateRateLimit('openai');
-                    logger.info(`بدء تحليل الكود باستخدام OpenAI, حجم الكود: ${file.content.length} حرف`);
-
-                    // استخدام OpenAI للتحليل
-                    analysisResult = await openaiService.analyzeCode(file.content, language, analysisType, appType);
-                    break;
-                case 'gemini':
-                    // تحديث معدل الطلبات
-                    this.updateRateLimit('gemini');
-                    logger.info(`بدء تحليل الكود باستخدام Google Gemini, حجم الكود: ${file.content.length} حرف`);
-
-                    // استخدام Gemini للتحليل
-                    analysisResult = await geminiService.analyzeCode(file.content, language, analysisType, appType);
-                    break;
-
-                case 'deepSeek':
-                    // تحديث معدل الطلبات
-                    this.updateRateLimit('deepSeek');
-                    logger.info(`بدء تحليل الكود باستخدام DeepSeek, حجم الكود: ${file.content.length} حرف`);
-
-                    // استخدام Deep Seek للتحليل
-                    if (analysisType === 'security') {
-                        analysisResult = await deepSeekService.analyzeCodeSecurity(file.content, language, appType);
-                    } else {
-                        // استخدام DeepSeek للتحليل العام
-                        analysisResult = await this.mockDeepSeekAnalysis(file.content, language, analysisType, appType);
+                // إذا كانت هناك نتائج من الذكاء الاصطناعي
+                if (aiResult && aiResult.findings && aiResult.findings.length > 0) {
+                    // إضافة النتائج إلى التقرير
+                    for (const finding of aiResult.findings) {
+                        report.addFinding(analysisType, {
+                            ...finding,
+                            filePath: file.path,
+                            type: finding.type || 'issue',
+                            source: `${service}_analyzer`,
+                            analysisTimestamp: new Date().toISOString()
+                        });
                     }
-                    break;
 
-                case 'llama':
-                    // تحديث معدل الطلبات
-                    this.updateRateLimit('llama');
-                    logger.info(`بدء تحليل الكود باستخدام Llama, حجم الكود: ${file.content.length} حرف`);
+                    logger.info(`تم اكتشاف ${aiResult.findings.length} مشكلة ${analysisType} إضافية بواسطة ${service} في الملف: ${file.path}`);
 
-                    // استخدام Llama للتحليل
-                    analysisResult = await llamaService.analyzeCode(file.content, language, analysisType, appType);
-                    break;
-
-                default:
-                    throw new Error(`خدمة تحليل غير معروفة: ${service}`);
-            }
-
-            const modelDuration = (Date.now() - modelStartTime) / 1000;
-            logger.info(`اكتمل تحليل النموذج لـ ${service}: ${file.path}, نوع ${analysisType}, المدة: ${modelDuration} ثانية`);
-
-            // سجل معلومات النتائج
-            const findingsCount = analysisResult.findings ? analysisResult.findings.length : 0;
-            logger.info(`تم العثور على ${findingsCount} نتيجة لملف: ${file.path}, نوع تحليل: ${analysisType}`);
-
-            // إضافة نتائج التحليل إلى التقرير
-            if (analysisResult.findings && Array.isArray(analysisResult.findings)) {
-                for (const finding of analysisResult.findings) {
-                    // إضافة معلومات إضافية للنتيجة
-                    finding.filePath = file.path;
-                    finding.type = finding.type || 'issue';
-                    finding.source = service; // إضافة مصدر التحليل
-                    finding.analysisTimestamp = new Date().toISOString(); // إضافة وقت التحليل
-                    report.addFinding(analysisType, finding);
-
-                    // سجل خطورة كل نتيجة
-                    logger.debug(`نتيجة: ${finding.title}, الخطورة: ${finding.severity}, المصدر: ${finding.source}`);
+                    // دمج النتائج المحلية ونتائج الذكاء الاصطناعي
+                    const combinedResults = [...localAnalysisResults, ...aiResult.findings];
+                    return {
+                        findings: combinedResults,
+                        summary: aiResult.summary || `تم اكتشاف ${combinedResults.length} مشكلة محتملة من نوع ${analysisType}`
+                    };
+                } else {
+                    // لم يتم العثور على مشكلات إضافية من الذكاء الاصطناعي
+                    logger.info(`لم يتم اكتشاف مشكلات ${analysisType} إضافية بواسطة ${service} في الملف: ${file.path}`);
+                    return {
+                        findings: localAnalysisResults,
+                        summary: `تم اكتشاف ${localAnalysisResults.length} مشكلة محتملة من نوع ${analysisType} (جميعها من التحليل المحلي)`
+                    };
                 }
+            } catch (aiError) {
+                logger.error(`خطأ في تحليل الذكاء الاصطناعي لنوع ${analysisType} للملف ${file.path} باستخدام ${service}: ${aiError.message}`);
+
+                // في حالة الخطأ، نعود بالنتائج المحلية فقط
+                return {
+                    findings: localAnalysisResults,
+                    summary: `التحليل المحلي فقط (فشل تحليل الذكاء الاصطناعي): ${localAnalysisResults.length} مشكلة محتملة`
+                };
             }
 
-            const fileAnalysisDuration = (Date.now() - fileAnalysisStart) / 1000;
-            logger.debug(`تم الانتهاء من تحليل نوع ${analysisType} للملف: ${file.path} باستخدام ${service}, وقت الانتهاء: ${new Date().toISOString()}, المدة: ${fileAnalysisDuration} ثانية`);
-
-            return analysisResult;
         } catch (error) {
             const fileAnalysisDuration = (Date.now() - fileAnalysisStart) / 1000;
             logger.error(`خطأ في تحليل نوع ${analysisType} للملف ${file.path}: ${error.message}, المدة: ${fileAnalysisDuration} ثانية`);
             logger.error(`تفاصيل الخطأ: ${error.stack || 'لا توجد تفاصيل إضافية'}`);
 
-            // إذا فشل التحليل باستخدام الخدمة المحددة، حاول استخدام خدمة أخرى
-            if (preferredService !== 'openai') {
-                logger.info(`محاولة استخدام OpenAI كخيار احتياطي للملف: ${file.path}`);
-                try {
-                    return await this.analyzeFile(file, language, analysisType, appType, report, 'openai');
-                } catch (fallbackError) {
-                    logger.error(`فشل التحليل البديل للملف ${file.path}: ${fallbackError.message}`);
-                    logger.error(`تفاصيل الخطأ البديل: ${fallbackError.stack || 'لا توجد تفاصيل إضافية'}`);
-                    throw fallbackError;
-                }
-            } else {
-                throw error;
-            }
+            // إعادة النتائج المحلية في حالة الخطأ
+            return {
+                findings: [],
+                summary: `حدث خطأ أثناء تحليل الكود: ${error.message}`
+            };
         }
     }
-
-
-
     /**
      * معالجة الطلبات المؤجلة
      * @param {Report} report - تقرير التحليل
      */
+    /**
+     * معالجة الطلبات المؤجلة
+     * @param {Report} report - تقرير التحليل
+     */
+
     async processDeferredRequests(report) {
         if (this.isProcessingDeferred) {
             logger.debug(`هناك عملية معالجة للطلبات المؤجلة قيد التنفيذ بالفعل، تم تخطي هذه المحاولة`);
@@ -609,6 +746,16 @@ class AnalyzerService {
             // معالجة الطلبات المؤجلة بشكل متتالي مع إضافة تأخير بينها
             for (let i = 0; i < this.deferredRequests.length; i++) {
                 const request = this.deferredRequests[i];
+
+                // التحقق من أسلوب التحليل، إذا كان "محلي فقط"، نتخطى هذا الطلب
+                const analysisMode = request.options?.analysisMode || 'local_ai';
+                if (analysisMode === 'local') {
+                    logger.debug(`تخطي معالجة طلب مؤجل لأن أسلوب التحليل هو "محلي فقط": ${request.file.path}`);
+                    this.deferredRequests.splice(i, 1);
+                    i--;
+                    continue;
+                }
+
                 const requestAge = (Date.now() - request.timestamp) / 1000;
 
                 logger.debug(`معالجة طلب مؤجل ${i+1}/${this.deferredRequests.length}: ${request.file.path}, نوع التحليل: ${request.analysisType}, عمر الطلب: ${requestAge.toFixed(1)} ثانية`);
@@ -635,7 +782,10 @@ class AnalyzerService {
                             request.analysisType,
                             request.appType,
                             request.report,
-                            service
+                            {
+                                ...request.options,
+                                preferredService: service
+                            }
                         );
 
                         // إزالة الطلب من قائمة الانتظار بعد معالجته بنجاح
@@ -689,6 +839,68 @@ class AnalyzerService {
             logger.debug(`تم تحرير حالة معالجة الطلبات المؤجلة`);
         }
     }
+
+
+
+    /**
+     * تحليل مستودع GitHub
+     * @param {Object} req - كائن الطلب
+     * @param {Object} res - كائن الاستجابة
+     */
+
+
+    /**
+     * الحصول على تقرير تحليل بواسطة المعرف
+     * @param {Object} req - كائن الطلب
+     * @param {Object} res - كائن الاستجابة
+     */
+    //   getReportById = async (req, res) => {
+    //     try {
+    //         const { id } = req.params;
+    //
+    //         // البحث عن التقرير في المخزن المؤقت
+    //         const report = reportsCache.get(id);
+    //
+    //         if (!report) {
+    //             return res.status(404).json({
+    //                 success: false,
+    //                 message: 'التقرير غير موجود'
+    //             });
+    //         }
+    //
+    //         // توليد ملخص للتقرير إذا كان مكتملًا وطريقة التحليل تتضمن الذكاء الاصطناعي
+    //         let summary = null;
+    //         if (report.status === 'completed') {
+    //             // استخراج أسلوب التحليل من البيانات المحفوظة أو افتراض أنه محلي + ذكاء اصطناعي
+    //             const analysisMode = report.analysisMode || 'local_ai';
+    //
+    //             // فقط إذا كان التحليل يتضمن الذكاء الاصطناعي، نقوم بتوليد ملخص
+    //             if (analysisMode === 'local_ai') {
+    //                 try {
+    //                     summary = await openaiService.generateSummaryReport(report);
+    //                 } catch (summaryError) {
+    //                     logger.error(`خطأ في توليد الملخص: ${summaryError.message}`);
+    //                 }
+    //             } else {
+    //                 // في حالة التحليل المحلي فقط، نقدم ملخصًا بسيطًا
+    //                 summary = "تم إجراء التحليل المحلي فقط، لا يوجد ملخص معتمد على الذكاء الاصطناعي.";
+    //             }
+    //         }
+    //
+    //         res.status(200).json({
+    //             success: true,
+    //             report: report.toJSON(),
+    //             summary
+    //         });
+    //     } catch (error) {
+    //         logger.error(`خطأ في الحصول على التقرير: ${error.message}`);
+    //         res.status(500).json({
+    //             success: false,
+    //             message: 'حدث خطأ أثناء الحصول على التقرير',
+    //             error: error.message
+    //         });
+    //     }
+    // };
 
     /**
      * الحصول على خدمة متاحة للتحليل
@@ -788,7 +1000,25 @@ class AnalyzerService {
      * @param {Report} report - تقرير التحليل
      * @param {string} preferredService - خدمة التحليل المفضلة
      */
-    deferRequest(file, language, analysisType, appType, report, preferredService) {
+    /**
+     * تأجيل طلب تحليل للمعالجة لاحقًا
+     * @param {Object} file - معلومات الملف
+     * @param {string} language - لغة البرمجة
+     * @param {string} analysisType - نوع التحليل
+     * @param {string} appType - نوع تطبيق الموبايل
+     * @param {Report} report - تقرير التحليل
+     * @param {string} preferredService - خدمة التحليل المفضلة
+     * @param {Object} options - خيارات التحليل
+     */
+    deferRequest(file, language, analysisType, appType, report, preferredService, options = {}) {
+        // استخراج أسلوب التحليل، في حالة التحليل المحلي فقط، لا يتم تأجيل الطلب
+        const analysisMode = options.analysisMode || 'local_ai';
+
+        if (analysisMode === 'local') {
+            logger.debug(`تم تجاهل تأجيل التحليل لأن أسلوب التحليل هو "محلي فقط": ${file.path}`);
+            return;
+        }
+
         logger.info(`تأجيل تحليل الملف: ${file.path} باستخدام ${preferredService}, وقت التأجيل: ${new Date().toISOString()}`);
 
         this.deferredRequests.push({
@@ -798,6 +1028,7 @@ class AnalyzerService {
             appType,
             report,
             preferredService,
+            options,
             timestamp: Date.now()
         });
 
@@ -856,12 +1087,20 @@ class AnalyzerService {
             '.gradle': 'Groovy',
             '.podspec': 'Ruby',
         };
-
         const language = extensionMap[extension] || null;
         if (!language) {
             logger.debug(`امتداد غير معروف: ${extension}`);
         }
         return language;
+    }
+
+    /**
+     * تأخير التنفيذ لفترة زمنية محددة
+     * @param {number} ms - عدد الميلي ثانية للتأخير
+     * @returns {Promise} وعد يتم حله بعد انتهاء فترة التأخير
+     */
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
 

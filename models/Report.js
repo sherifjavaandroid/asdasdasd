@@ -50,13 +50,129 @@ class Report {
     }
 
     /**
+     * إنشاء ملخص للنتائج
+     * هذه الطريقة تحسب مجموع النتائج في كل فئة وتحدّث الملخص
+     */
+    createSummary() {
+        // التأكد من وجود بنية صحيحة للملخص
+        this.ensureSummaryStructure();
+
+        // إعادة حساب ملخص الأمان
+        if (this.findings.security && this.findings.security.length > 0) {
+            // إعادة تعيين العدادات
+            this.summary.security.critical = 0;
+            this.summary.security.high = 0;
+            this.summary.security.medium = 0;
+            this.summary.security.low = 0;
+            this.summary.security.info = 0;
+
+            // حساب مجموع كل مستوى خطورة
+            for (const finding of this.findings.security) {
+                if (finding.severity && typeof finding.severity === 'string') {
+                    const severity = finding.severity.toLowerCase();
+                    if (this.summary.security[severity] !== undefined) {
+                        this.summary.security[severity]++;
+                    }
+                }
+            }
+
+            // حساب المجموع الكلي
+            this.summary.security.total =
+                this.summary.security.critical +
+                this.summary.security.high +
+                this.summary.security.medium +
+                this.summary.security.low +
+                this.summary.security.info;
+        }
+
+        // إعادة حساب ملخص الأداء
+        if (this.findings.performance && this.findings.performance.length > 0) {
+            this.summary.performance.issues = 0;
+            this.summary.performance.recommendations = 0;
+
+            for (const finding of this.findings.performance) {
+                if (finding.type === 'issue') {
+                    this.summary.performance.issues++;
+                } else if (finding.type === 'recommendation') {
+                    this.summary.performance.recommendations++;
+                }
+            }
+        }
+
+        // إعادة حساب ملخص الذاكرة
+        if (this.findings.memory && this.findings.memory.length > 0) {
+            this.summary.memory.issues = 0;
+            this.summary.memory.recommendations = 0;
+
+            for (const finding of this.findings.memory) {
+                if (finding.type === 'issue') {
+                    this.summary.memory.issues++;
+                } else if (finding.type === 'recommendation') {
+                    this.summary.memory.recommendations++;
+                }
+            }
+        }
+
+        // إعادة حساب ملخص البطارية
+        if (this.findings.battery && this.findings.battery.length > 0) {
+            this.summary.battery.issues = 0;
+            this.summary.battery.recommendations = 0;
+
+            for (const finding of this.findings.battery) {
+                if (finding.type === 'issue') {
+                    this.summary.battery.issues++;
+                } else if (finding.type === 'recommendation') {
+                    this.summary.battery.recommendations++;
+                }
+            }
+        }
+    }
+
+    /**
      * تعيين حالة التقرير
      * @param {string} status - حالة التقرير الجديدة
      */
     setStatus(status) {
         this.status = status;
+
         if (status === 'completed') {
-            this.completedAt = new Date();
+            this.completedAt = new Date().toISOString();
+            // إنشاء ملخص للنتائج
+            this.createSummary();
+            // التأكد من وجود بنية صحيحة للملخص
+            this.ensureSummaryStructure();
+        }
+    }
+
+    // إضافة طريقة للتأكد من وجود بنية صحيحة في ملخص التقرير
+    ensureSummaryStructure() {
+        // التأكد من وجود جميع فئات التحليل في الملخص
+        const analysisTypes = ['security', 'performance', 'memory', 'battery'];
+
+        // إذا لم يكن الملخص موجودًا، قم بإنشائه
+        if (!this.summary) {
+            this.summary = {};
+        }
+
+        // إنشاء الهيكل الصحيح لكل نوع تحليل إذا لم يكن موجودًا
+        for (const type of analysisTypes) {
+            if (!this.summary[type]) {
+                if (type === 'security') {
+                    this.summary[type] = {
+                        critical: 0,
+                        high: 0,
+                        medium: 0,
+                        low: 0,
+                        info: 0,
+                        total: 0
+                    };
+                } else {
+                    this.summary[type] = {
+                        issues: 0,
+                        recommendations: 0
+                    };
+                }
+            }
         }
     }
 

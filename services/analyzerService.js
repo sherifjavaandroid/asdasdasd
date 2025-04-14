@@ -9,6 +9,7 @@ const Report = require('../models/Report');
 const config = require('../config/config');
 // في بداية ملف analyzerService.js، نضيف:
 const securityAnalyzer = require('./securityAnalyzer');
+const batteryAnalyzer = require('./batteryAnalyzer');
 
 /**
  * خدمة تحليل الكود الرئيسية مع تحسينات توزيع الطلبات وإدارة معدلات الطلبات
@@ -369,6 +370,34 @@ class AnalyzerService {
                 } catch (localAnalysisError) {
                     logger.error(`خطأ في التحليل المحلي للأمان: ${localAnalysisError.message}`);
                     // نواصل التحليل باستخدام خدمات الذكاء الاصطناعي حتى في حالة فشل التحليل المحلي
+                }
+            }
+            if (analysisType === 'battery') {
+                try {
+                    // Call battery analyzer
+                    const batteryIssues = batteryAnalyzer.analyzeBatteryPatterns(
+                        file.content,
+                        file.path,
+                        language,
+                        appType
+                    );
+
+                    // Add battery issues to the report
+                    if (batteryIssues && batteryIssues.length > 0) {
+                        for (const finding of batteryIssues) {
+                            report.addFinding('battery', {
+                                ...finding,
+                                filePath: file.path,
+                                type: finding.type || 'issue',
+                                source: 'local_analyzer',
+                                analysisTimestamp: new Date().toISOString()
+                            });
+                        }
+                        logger.info(`Found ${batteryIssues.length} battery issues in file: ${file.path}`);
+                    }
+                } catch (localAnalysisError) {
+                    logger.error(`Error in local battery analysis: ${localAnalysisError.message}`);
+                    // Continue with AI-based analysis even if local analysis fails
                 }
             }
 

@@ -559,5 +559,6 @@ class BatteryAnalyzer {
         return snippet;
     }
 }
-// Export the BatteryAnalyzer class
+
 module.exports = BatteryAnalyzer;
+

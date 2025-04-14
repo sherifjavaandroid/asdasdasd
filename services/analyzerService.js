@@ -8,7 +8,12 @@ const { detectMobileAppType } = require('../utils/helpers');
 const Report = require('../models/Report');
 const config = require('../config/config');
 const securityAnalyzer = require('./securityAnalyzer');
-const batteryAnalyzer = require('./batteryAnalyzer');
+const BatteryAnalyzer = require('./batteryAnalyzer');
+const batteryAnalyzer = new BatteryAnalyzer();
+
+
+
+
 const performanceAnalyzer = require('./performanceAnalyzer');
 const memoryAnalyzer = require('./memoryAnalyzer');
 

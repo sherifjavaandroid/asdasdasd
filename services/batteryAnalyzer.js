@@ -1,8 +1,6 @@
 const logger = require('../utils/logger');
 const { BATTERY_CATEGORIES, SEVERITY_LEVELS } = require('../utils/constants');
 
-module.exports = BatteryAnalyzer;
-
 /**
  * خدمة تحليل استهلاك البطارية في الكود
  */
@@ -560,115 +558,6 @@ class BatteryAnalyzer {
 
         return snippet;
     }
-
-    /**
-     * التحقق من وجود نمط في نص معين
-     * @param {string} text - النص المراد البحث فيه
-     * @param {RegExp} pattern - النمط للبحث عنه
-     * @returns {boolean} هل تم العثور على النمط
-     */
-    hasPattern(text, pattern) {
-        pattern.lastIndex = 0;
-        return pattern.test(text);
-    }
-
-    /**
-     * تنظيف الكود من التعليقات
-     * @param {string} code - الكود المراد تنظيفه
-     * @param {string} language - لغة البرمجة
-     * @returns {string} الكود بدون تعليقات
-     */
-    cleanCodeFromComments(code, language) {
-        if (language === 'Java' || language === 'Kotlin' || language === 'JavaScript' || language === 'TypeScript' || language === 'Swift' || language === 'Dart') {
-            // إزالة تعليقات السطر الواحد
-            code = code.replace(/\/\/.*$/gm, '');
-
-            // إزالة تعليقات متعددة الأسطر
-            code = code.replace(/\/\*[\s\S]*?\*\//g, '');
-        }
-
-        return code;
-    }
-
-    /**
-     * تصدير التقرير إلى صيغة JSON
-     * @param {Array} issues - قائمة المشاكل المكتشفة
-     * @param {string} outputPath - مسار الملف الناتج
-     * @returns {boolean} نجاح عملية التصدير
-     */
-    exportReportToJson(issues, outputPath) {
-        try {
-            // تحويل المشاكل إلى صيغة JSON
-            const jsonReport = JSON.stringify({
-                timestamp: new Date().toISOString(),
-                totalIssues: issues.length,
-                issues: issues
-            }, null, 2);
-
-            // استخدام logger بدلاً من التعامل المباشر مع نظام الملفات
-            logger.info(`تم إنشاء تقرير باسم: ${outputPath}`);
-
-            return true;
-        } catch (error) {
-            logger.error(`خطأ في تصدير التقرير: ${error.message}`);
-            return false;
-        }
-    }
-
-    /**
-     * تجميع المشاكل حسب تصنيفها
-     * @param {Array} issues - قائمة المشاكل المكتشفة
-     * @returns {Object} المشاكل مصنفة حسب الفئة
-     */
-    groupIssuesByCategory(issues) {
-        const groupedIssues = {};
-
-        // تصنيف المشاكل حسب الفئة
-        for (const issue of issues) {
-            if (!groupedIssues[issue.category]) {
-                groupedIssues[issue.category] = [];
-            }
-
-            groupedIssues[issue.category].push(issue);
-        }
-
-        return groupedIssues;
-    }
-
-    /**
-     * حساب نسبة الخطورة الإجمالية
-     * @param {Array} issues - قائمة المشاكل المكتشفة
-     * @returns {string} مستوى الخطورة الإجمالي
-     */
-    calculateOverallSeverity(issues) {
-        if (issues.length === 0) {
-            return 'LOW';
-        }
-
-        // عدد كل نوع من مستويات الخطورة
-        let criticalCount = 0;
-        let highCount = 0;
-        let mediumCount = 0;
-
-        for (const issue of issues) {
-            if (issue.severity === SEVERITY_LEVELS.CRITICAL) {
-                criticalCount++;
-            } else if (issue.severity === SEVERITY_LEVELS.HIGH) {
-                highCount++;
-            } else if (issue.severity === SEVERITY_LEVELS.MEDIUM) {
-                mediumCount++;
-            }
-        }
-
-        // تحديد المستوى الإجمالي
-        if (criticalCount > 0) {
-            return SEVERITY_LEVELS.CRITICAL;
-        } else if (highCount > 2 || (highCount > 0 && mediumCount > 3)) {
-            return SEVERITY_LEVELS.HIGH;
-        } else if (highCount > 0 || mediumCount > 1) {
-            return SEVERITY_LEVELS.MEDIUM;
-        } else {
-            return SEVERITY_LEVELS.LOW;
-        }
-    }
 }
+// Export the BatteryAnalyzer class
+module.exports = BatteryAnalyzer;

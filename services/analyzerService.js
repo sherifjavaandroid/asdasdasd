@@ -11,6 +11,8 @@ const config = require('../config/config');
 const securityAnalyzer = require('./securityAnalyzer');
 const batteryAnalyzer = require('./batteryAnalyzer');
 const performanceAnalyzer = require('./performanceAnalyzer');
+const memoryAnalyzer = require('./memoryAnalyzer');
+
 
 /**
  * خدمة تحليل الكود الرئيسية مع تحسينات توزيع الطلبات وإدارة معدلات الطلبات
@@ -374,6 +376,35 @@ class AnalyzerService {
                 }
             }
 
+
+            if (analysisType === 'memory') {
+                try {
+                    logger.debug(`بدء تحليل الذاكرة للملف: ${file.path}, وقت البدء: ${new Date().toISOString()}`);
+
+                    // استدعاء تحليل الذاكرة
+                    const memoryIssues = memoryAnalyzer.analyzeMemoryPatterns(file.content, file.path, language, appType);
+
+                    // في حالة وجود نتائج تحليل
+                    if (memoryIssues && memoryIssues.length > 0) {
+                        memoryIssues.forEach(finding => {
+                            report.addFinding('memory', {
+                                ...finding,
+                                filePath: file.path,
+                                type: finding.type || 'issue',
+                                source: 'local_analyzer',
+                                analysisTimestamp: new Date().toISOString()
+                            });
+                        });
+                        logger.info(`تم اكتشاف ${memoryIssues.length} مشكلة ذاكرة في الملف: ${file.path}`);
+                    }
+
+                    // يمكنك إرجاع النتيجة مباشرةً إذا كان التحليل محلياً
+                    return { findings: memoryIssues };
+                } catch (error) {
+                    logger.error(`خطأ في تحليل الذاكرة للملف ${file.path}: ${error.message}`);
+                    throw error;
+                }
+            }
 
             if (analysisType === 'battery') {
                 try {

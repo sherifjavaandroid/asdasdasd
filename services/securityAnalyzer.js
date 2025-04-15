@@ -60,13 +60,14 @@ class SecurityAnalyzer {
      * @param {Array} issues - قائمة المشاكل المكتشفة
      */
     checkHardcodedSecrets(code, filePath, language, issues) {
-        // أنماط للبحث عن الأسرار المضمنة في الكود
+        // أنماط للبحث عن الأسرار المضمنة في الكود - تعديل التعبيرات النمطية لتكون أكثر دقة
         const secretPatterns = [
             {
-                pattern: /(['"])(?:api|jwt|auth|app|token|secret|password|pw|key|cert)_?(?:key|token|secret|password|auth)?['"\s]*(?::|=>|=)\s*['"]([a-zA-Z0-9_\-\.=]{10,})['"]/gi,
+                // عدل النمط للبحث عن الأسرار الحقيقية مثل المفاتيح والرموز
+                pattern: /(['"])(?:api|jwt|auth|app|token|secret|password|pw|key|cert|oauth|access_token|client_secret)_?(?:key|token|secret|password|auth)?['"\s]*(?::|=>|=)\s*['"]([a-zA-Z0-9_\-\.=]{16,})['"]|['"]sk_live_[a-zA-Z0-9]{24,}['"]|['"]ak_live_[a-zA-Z0-9]{24,}['"]|['"]pk_live_[a-zA-Z0-9]{24,}['"]/gi,
                 category: SECURITY_RISKS.HARDCODED_SECRETS,
                 severity: SEVERITY_LEVELS.HIGH,
-                description: 'تم العثور على سر مضمن في الكود. يجب تخزين الأسرار في مخزن آمن أو متغيرات بيئية.',
+                description: 'تم العثور على سر مضمن في الكود مثل API key أو token. يجب تخزين الأسرار في مخزن آمن أو متغيرات بيئية.',
                 recommendation: 'استخدم متغيرات بيئية أو خدمة إدارة أسرار آمنة بدلاً من تضمين الأسرار مباشرة في الكود.'
             },
             {
@@ -77,7 +78,9 @@ class SecurityAnalyzer {
                 recommendation: 'استخدم طرق آمنة للمصادقة بدلاً من تضمين بيانات الاعتماد في عناوين URL.'
             },
             {
-                pattern: /(['"])((?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{4}))(['"])/g,
+                // تعديل نمط البحث عن سلاسل Base64 لتجنب نصوص واجهة المستخدم العادية
+                pattern: /(['"])((?:[A-Za-z0-9+\/]{24,})(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{4}))(['"])/g,
+                exclude: /(Text|title|label|button|content|message|description|name|username)/i, // استبعاد النصوص العادية
                 category: SECURITY_RISKS.HARDCODED_SECRETS,
                 severity: SEVERITY_LEVELS.MEDIUM,
                 description: 'تم العثور على سلسلة تشبه بيانات مشفرة بـ Base64. قد تكون بيانات حساسة مشفرة بشكل ضعيف.',
@@ -85,12 +88,23 @@ class SecurityAnalyzer {
             }
         ];
 
-        for (const { pattern, category, severity, description, recommendation } of secretPatterns) {
+        for (const { pattern, category, severity, description, recommendation, exclude } of secretPatterns) {
             // إعادة تعيين lastIndex للتأكد من بدء البحث من بداية السلسلة
             pattern.lastIndex = 0;
 
             let match;
             while ((match = pattern.exec(code)) !== null) {
+                // فحص إضافي لتجاهل النصوص العادية المتعلقة بواجهة المستخدم
+                if (exclude && exclude.test(code.substring(Math.max(0, match.index - 30), match.index + match[0].length + 30))) {
+                    continue;
+                }
+
+                // تجاهل النصوص العادية مثل 'text' و 'label' والرسائل
+                const context = code.substring(Math.max(0, match.index - 50), match.index + match[0].length + 50);
+                if (context.match(/(?:const|new|var|let|final)\s+(?:Text|Button|Label|Message|String)/i)) {
+                    continue;
+                }
+
                 const lineNumber = this.getLineNumber(code, match.index);
                 const codeSnippet = this.extractCodeSnippet(code, match.index, match[0].length);
 

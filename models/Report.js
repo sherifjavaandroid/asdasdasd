@@ -83,6 +83,31 @@ class Report {
                 this.summary.security.medium +
                 this.summary.security.low +
                 this.summary.security.info;
+
+            // ترتيب النتائج حسب الخطورة ونقل النتائج "لم يتم العثور على مشكلات" إلى آخر القائمة
+            this.findings.security.sort((a, b) => {
+                // تحقق من وجود عنوان "لم يتم العثور على مشكلات"
+                const isANoIssues = a.title && a.title.includes('لم يتم العثور على مشكلات');
+                const isBNoIssues = b.title && b.title.includes('لم يتم العثور على مشكلات');
+
+                // إذا كان إحداهما "لم يتم العثور على مشكلات"، نضعه في النهاية
+                if (isANoIssues && !isBNoIssues) return 1;
+                if (!isANoIssues && isBNoIssues) return -1;
+
+                // إذا كان كلاهما نفس النوع، نرتب حسب الخطورة
+                const severityOrder = {
+                    'critical': 0,
+                    'high': 1,
+                    'medium': 2,
+                    'low': 3,
+                    'info': 4
+                };
+
+                const severityA = a.severity ? a.severity.toLowerCase() : 'info';
+                const severityB = b.severity ? b.severity.toLowerCase() : 'info';
+
+                return severityOrder[severityA] - severityOrder[severityB];
+            });
         }
 
         // إعادة حساب ملخص الأداء
@@ -97,6 +122,24 @@ class Report {
                     this.summary.performance.recommendations++;
                 }
             }
+
+            // ترتيب نتائج الأداء - ضع القضايا أولاً، ثم التوصيات، ثم "لم يتم العثور على مشكلات"
+            this.findings.performance.sort((a, b) => {
+                // تحقق من وجود عنوان "لم يتم العثور على مشكلات"
+                const isANoIssues = a.title && a.title.includes('لم يتم العثور على مشكلات');
+                const isBNoIssues = b.title && b.title.includes('لم يتم العثور على مشكلات');
+
+                // إذا كان إحداهما "لم يتم العثور على مشكلات"، نضعه في النهاية
+                if (isANoIssues && !isBNoIssues) return 1;
+                if (!isANoIssues && isBNoIssues) return -1;
+
+                // ترتيب حسب النوع (قضية أولاً، ثم توصية)
+                const typeOrder = { 'issue': 0, 'recommendation': 1 };
+                const typeA = a.type || 'recommendation';
+                const typeB = b.type || 'recommendation';
+
+                return typeOrder[typeA] - typeOrder[typeB];
+            });
         }
 
         // إعادة حساب ملخص الذاكرة
@@ -111,6 +154,24 @@ class Report {
                     this.summary.memory.recommendations++;
                 }
             }
+
+            // ترتيب نتائج الذاكرة
+            this.findings.memory.sort((a, b) => {
+                // تحقق من وجود عنوان "لم يتم العثور على مشكلات"
+                const isANoIssues = a.title && a.title.includes('لم يتم العثور على مشكلات');
+                const isBNoIssues = b.title && b.title.includes('لم يتم العثور على مشكلات');
+
+                // إذا كان إحداهما "لم يتم العثور على مشكلات"، نضعه في النهاية
+                if (isANoIssues && !isBNoIssues) return 1;
+                if (!isANoIssues && isBNoIssues) return -1;
+
+                // ترتيب حسب النوع (قضية أولاً، ثم توصية)
+                const typeOrder = { 'issue': 0, 'recommendation': 1 };
+                const typeA = a.type || 'recommendation';
+                const typeB = b.type || 'recommendation';
+
+                return typeOrder[typeA] - typeOrder[typeB];
+            });
         }
 
         // إعادة حساب ملخص البطارية
@@ -125,6 +186,24 @@ class Report {
                     this.summary.battery.recommendations++;
                 }
             }
+
+            // ترتيب نتائج البطارية
+            this.findings.battery.sort((a, b) => {
+                // تحقق من وجود عنوان "لم يتم العثور على مشكلات"
+                const isANoIssues = a.title && a.title.includes('لم يتم العثور على مشكلات');
+                const isBNoIssues = b.title && b.title.includes('لم يتم العثور على مشكلات');
+
+                // إذا كان إحداهما "لم يتم العثور على مشكلات"، نضعه في النهاية
+                if (isANoIssues && !isBNoIssues) return 1;
+                if (!isANoIssues && isBNoIssues) return -1;
+
+                // ترتيب حسب النوع (قضية أولاً، ثم توصية)
+                const typeOrder = { 'issue': 0, 'recommendation': 1 };
+                const typeA = a.type || 'recommendation';
+                const typeB = b.type || 'recommendation';
+
+                return typeOrder[typeA] - typeOrder[typeB];
+            });
         }
     }
 

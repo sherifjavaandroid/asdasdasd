@@ -106,13 +106,7 @@ class Report {
                 const severityA = a.severity ? a.severity.toLowerCase() : 'info';
                 const severityB = b.severity ? b.severity.toLowerCase() : 'info';
 
-                // ترتيب أولاً حسب الخطورة
-                if (severityOrder[severityA] !== severityOrder[severityB]) {
-                    return severityOrder[severityA] - severityOrder[severityB];
-                }
-
-                // في حالة تساوي الخطورة، نرتب حسب العنوان
-                return (a.title || '').localeCompare(b.title || '');
+                return severityOrder[severityA] - severityOrder[severityB];
             });
 
             // تجميع المشاكل حسب النوع
@@ -304,15 +298,47 @@ class Report {
         const groupedByTitle = {};
         const groupedFindings = [];
 
-        for (const finding of this.findings[category]) {
+        // أولاً، علينا معالجة رسائل "لم يتم العثور على مشكلات" بشكل خاص
+        let noIssuesFindings = this.findings[category].filter(finding =>
+            finding.title && finding.title.includes('لم يتم العثور على مشكلات')
+        );
+
+        // إذا وجدنا أكثر من رسالة "لم يتم العثور على مشكلات"، نجمعها
+        if (noIssuesFindings.length > 0) {
+            const firstNoIssue = noIssuesFindings[0];
+            const noIssuesMessage = {
+                ...firstNoIssue,
+                instances: noIssuesFindings.map(f => ({
+                    ...f,
+                    filePath: f.filePath // تخزين مسار الملف لكل حالة
+                })),
+                description: `تم فحص ${noIssuesFindings.length} ملف ولم يتم العثور على مشكلات ${category === 'security' ? 'أمنية' : category === 'performance' ? 'أداء' : category === 'memory' ? 'ذاكرة' : 'بطارية'} في أي منها.`,
+                recommendation: firstNoIssue.recommendation,
+                severity: firstNoIssue.severity,
+                type: firstNoIssue.type,
+                category: firstNoIssue.category,
+                analysisTimestamp: firstNoIssue.analysisTimestamp,
+                source: firstNoIssue.source
+            };
+
+            // إضافة قائمة الملفات إلى الوصف
+            if (noIssuesFindings.length <= 10) {
+                noIssuesMessage.filesList = noIssuesFindings.map(f => f.filePath).join(', ');
+            } else {
+                const firstFiles = noIssuesFindings.slice(0, 5).map(f => f.filePath).join(', ');
+                const lastFiles = noIssuesFindings.slice(-5).map(f => f.filePath).join(', ');
+                noIssuesMessage.filesList = `${firstFiles}, ... و ${noIssuesFindings.length - 10} ملفات أخرى, ${lastFiles}`;
+            }
+
+            groupedFindings.push(noIssuesMessage);
+        }
+
+        // ثم نعالج باقي المشاكل، باستثناء "لم يتم العثور على مشكلات"
+        for (const finding of this.findings[category].filter(f =>
+            !f.title || !f.title.includes('لم يتم العثور على مشكلات')
+        )) {
             // استخدام العنوان كمفتاح للتجميع
             const title = finding.title || '';
-
-            // تجاهل الرسائل "لم يتم العثور على مشكلات"
-            if (title.includes('لم يتم العثور على مشكلات')) {
-                groupedFindings.push(finding);
-                continue;
-            }
 
             // إنشاء مفتاح تجميع من العنوان
             if (!groupedByTitle[title]) {
@@ -357,7 +383,20 @@ class Report {
             const severityA = a.severity ? a.severity.toLowerCase() : 'info';
             const severityB = b.severity ? b.severity.toLowerCase() : 'info';
 
-            return severityOrder[severityA] - severityOrder[severityB];
+            // ترتيب حسب الخطورة (critical أولاً)
+            if (severityOrder[severityA] !== severityOrder[severityB]) {
+                return severityOrder[severityA] - severityOrder[severityB];
+            }
+
+            // في حالة تساوي الخطورة، اجعل "لم يتم العثور على مشكلات" في النهاية
+            const isANoIssues = a.title && a.title.includes('لم يتم العثور على مشكلات');
+            const isBNoIssues = b.title && b.title.includes('لم يتم العثور على مشكلات');
+
+            if (isANoIssues && !isBNoIssues) return 1;
+            if (!isANoIssues && isBNoIssues) return -1;
+
+            // في حالة تساوي الخطورة والنوع، نرتب حسب العنوان
+            return (a.title || '').localeCompare(b.title || '');
         });
 
         // تحديث النتائج بالمجموعات المرتبة

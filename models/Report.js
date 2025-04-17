@@ -106,8 +106,17 @@ class Report {
                 const severityA = a.severity ? a.severity.toLowerCase() : 'info';
                 const severityB = b.severity ? b.severity.toLowerCase() : 'info';
 
-                return severityOrder[severityA] - severityOrder[severityB];
+                // ترتيب أولاً حسب الخطورة
+                if (severityOrder[severityA] !== severityOrder[severityB]) {
+                    return severityOrder[severityA] - severityOrder[severityB];
+                }
+
+                // في حالة تساوي الخطورة، نرتب حسب العنوان
+                return (a.title || '').localeCompare(b.title || '');
             });
+
+            // تجميع المشاكل حسب النوع
+            this.groupFindingsByType('security');
         }
 
         // إعادة حساب ملخص الأداء
@@ -138,8 +147,33 @@ class Report {
                 const typeA = a.type || 'recommendation';
                 const typeB = b.type || 'recommendation';
 
-                return typeOrder[typeA] - typeOrder[typeB];
+                // ترتيب أولاً حسب النوع
+                if (typeOrder[typeA] !== typeOrder[typeB]) {
+                    return typeOrder[typeA] - typeOrder[typeB];
+                }
+
+                // ثم ترتيب حسب الخطورة إذا كانت متاحة
+                const severityOrder = {
+                    'critical': 0,
+                    'high': 1,
+                    'medium': 2,
+                    'low': 3,
+                    'info': 4
+                };
+
+                const severityA = a.severity ? a.severity.toLowerCase() : 'info';
+                const severityB = b.severity ? b.severity.toLowerCase() : 'info';
+
+                if (severityOrder[severityA] !== severityOrder[severityB]) {
+                    return severityOrder[severityA] - severityOrder[severityB];
+                }
+
+                // في حالة تساوي الخطورة والنوع، نرتب حسب العنوان
+                return (a.title || '').localeCompare(b.title || '');
             });
+
+            // تجميع المشاكل حسب النوع
+            this.groupFindingsByType('performance');
         }
 
         // إعادة حساب ملخص الذاكرة
@@ -170,8 +204,33 @@ class Report {
                 const typeA = a.type || 'recommendation';
                 const typeB = b.type || 'recommendation';
 
-                return typeOrder[typeA] - typeOrder[typeB];
+                // ترتيب أولاً حسب النوع
+                if (typeOrder[typeA] !== typeOrder[typeB]) {
+                    return typeOrder[typeA] - typeOrder[typeB];
+                }
+
+                // ثم ترتيب حسب الخطورة إذا كانت متاحة
+                const severityOrder = {
+                    'critical': 0,
+                    'high': 1,
+                    'medium': 2,
+                    'low': 3,
+                    'info': 4
+                };
+
+                const severityA = a.severity ? a.severity.toLowerCase() : 'info';
+                const severityB = b.severity ? b.severity.toLowerCase() : 'info';
+
+                if (severityOrder[severityA] !== severityOrder[severityB]) {
+                    return severityOrder[severityA] - severityOrder[severityB];
+                }
+
+                // في حالة تساوي الخطورة والنوع، نرتب حسب العنوان
+                return (a.title || '').localeCompare(b.title || '');
             });
+
+            // تجميع المشاكل حسب النوع
+            this.groupFindingsByType('memory');
         }
 
         // إعادة حساب ملخص البطارية
@@ -202,9 +261,107 @@ class Report {
                 const typeA = a.type || 'recommendation';
                 const typeB = b.type || 'recommendation';
 
-                return typeOrder[typeA] - typeOrder[typeB];
+                // ترتيب أولاً حسب النوع
+                if (typeOrder[typeA] !== typeOrder[typeB]) {
+                    return typeOrder[typeA] - typeOrder[typeB];
+                }
+
+                // ثم ترتيب حسب الخطورة إذا كانت متاحة
+                const severityOrder = {
+                    'critical': 0,
+                    'high': 1,
+                    'medium': 2,
+                    'low': 3,
+                    'info': 4
+                };
+
+                const severityA = a.severity ? a.severity.toLowerCase() : 'info';
+                const severityB = b.severity ? b.severity.toLowerCase() : 'info';
+
+                if (severityOrder[severityA] !== severityOrder[severityB]) {
+                    return severityOrder[severityA] - severityOrder[severityB];
+                }
+
+                // في حالة تساوي الخطورة والنوع، نرتب حسب العنوان
+                return (a.title || '').localeCompare(b.title || '');
             });
+
+            // تجميع المشاكل حسب النوع
+            this.groupFindingsByType('battery');
         }
+    }
+
+    /**
+     * تجميع المشاكل حسب النوع أو الفئة
+     * @param {string} category - فئة التحليل (security, performance, memory, battery)
+     */
+    groupFindingsByType(category) {
+        if (!this.findings[category] || this.findings[category].length === 0) {
+            return;
+        }
+
+        // تجميع المشاكل حسب العنوان
+        const groupedByTitle = {};
+        const groupedFindings = [];
+
+        for (const finding of this.findings[category]) {
+            // استخدام العنوان كمفتاح للتجميع
+            const title = finding.title || '';
+
+            // تجاهل الرسائل "لم يتم العثور على مشكلات"
+            if (title.includes('لم يتم العثور على مشكلات')) {
+                groupedFindings.push(finding);
+                continue;
+            }
+
+            // إنشاء مفتاح تجميع من العنوان
+            if (!groupedByTitle[title]) {
+                // نسخ العنصر الأول لهذا النوع
+                groupedByTitle[title] = { ...finding, instances: [{ ...finding }] };
+
+                // تحديث الوصف ليعكس أنه مجموعة
+                if (groupedByTitle[title].description) {
+                    groupedByTitle[title].originalDescription = finding.description;
+                }
+
+                // إزالة المعلومات الخاصة بمثيل معين
+                delete groupedByTitle[title].lineNumber;
+                delete groupedByTitle[title].codeSnippet;
+            } else {
+                // إضافة هذا المثيل إلى المجموعة
+                groupedByTitle[title].instances.push({ ...finding });
+
+                // تحديث عدد المثيلات في الوصف
+                const instanceCount = groupedByTitle[title].instances.length;
+                if (instanceCount > 1 && groupedByTitle[title].originalDescription) {
+                    groupedByTitle[title].description = `تم العثور على ${instanceCount} حالة من هذه المشكلة. ${groupedByTitle[title].originalDescription}`;
+                }
+            }
+        }
+
+        // تحويل المجموعات إلى مصفوفة
+        for (const key in groupedByTitle) {
+            groupedFindings.push(groupedByTitle[key]);
+        }
+
+        // إعادة ترتيب النتائج المجمعة حسب الخطورة
+        groupedFindings.sort((a, b) => {
+            const severityOrder = {
+                'critical': 0,
+                'high': 1,
+                'medium': 2,
+                'low': 3,
+                'info': 4
+            };
+
+            const severityA = a.severity ? a.severity.toLowerCase() : 'info';
+            const severityB = b.severity ? b.severity.toLowerCase() : 'info';
+
+            return severityOrder[severityA] - severityOrder[severityB];
+        });
+
+        // تحديث النتائج بالمجموعات المرتبة
+        this.findings[category] = groupedFindings;
     }
 
     /**
